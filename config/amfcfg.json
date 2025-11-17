@@ -1,0 +1,116 @@
+{
+  "info": {
+    "version": "1.0.0",
+    "description": "AMF configuration"
+  },
+  "configuration": {
+    "amfName": "AMF",
+    "ngapIpList": [
+      "127.0.0.1"
+    ],
+    "ngapPort": 38412,
+    "sbi": {
+      "scheme": "http",
+      "registerIPv4": "127.0.0.18",
+      "bindingIPv4": "127.0.0.18",
+      "port": 8000
+    },
+    "serviceNameList": [
+      "namf-comm",
+      "namf-evts",
+      "namf-mt",
+      "namf-loc",
+      "namf-oam"
+    ],
+    "servedGuamiList": [
+      {
+        "plmnId": {
+          "mcc": "001",
+          "mnc": "01"
+        },
+        "amfId": "cafe00"
+      }
+    ],
+    "supportTaiList": [
+      {
+        "plmnId": {
+          "mcc": "001",
+          "mnc": "01"
+        },
+        "tac": "000001"
+      }
+    ],
+    "plmnSupportList": [
+      {
+        "plmnId": {
+          "mcc": "001",
+          "mnc": "01"
+        },
+        "sNssaiList": [
+          {
+            "sst": 1,
+            "sd": "010203"
+          },
+          {
+            "sst": 1,
+            "sd": "112233"
+          }
+        ]
+      }
+    ],
+    "supportDnnList": [
+      "internet",
+      "ims"
+    ],
+    "nfServices": [
+      {
+        "serviceName": "namf-comm",
+        "version": ["v1"]
+      }
+    ],
+    "security": {
+      "integrityOrder": [
+        "NIA2",
+        "NIA1",
+        "NIA0"
+      ],
+      "cipheringOrder": [
+        "NEA2",
+        "NEA1",
+        "NEA0"
+      ]
+    },
+    "networkName": {
+      "full": "5G Test Network",
+      "short": "5GTN"
+    },
+    "t3502Value": 720,
+    "t3512Value": 3600,
+    "non3gppDeregistrationTimerValue": 3240,
+    "t3513": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3522": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3550": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3560": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3565": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    }
+  }
+}

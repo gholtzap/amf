@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  amf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: amf
+    ports:
+      - "8000:8000"    # SBI interface
+      - "38412:38412"  # NGAP interface
+    volumes:
+      - ./config:/app/config
+    networks:
+      - 5g-core
+    restart: unless-stopped
+    environment:
+      - AMF_CONFIG_PATH=/app/config/amfcfg.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  5g-core:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.200.0/24
