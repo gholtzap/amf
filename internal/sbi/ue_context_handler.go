@@ -223,3 +223,91 @@ func parseMultipartRequest(r *http.Request) (*UeContextCreateData, []byte, error
 
 	return nil, nil, fmt.Errorf("unsupported Content-Type: %s", contentType)
 }
+
+func (s *Server) AssignEbi(ueContextId string, assignData *AssignEbiData) (*AssignedEbiData, *ProblemDetails) {
+	logger.SbiLog.Infof("Assigning EBI for UE: %s, PDU Session ID: %d", ueContextId, assignData.PduSessionId)
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	session, exists := ue.PduSessions[assignData.PduSessionId]
+	if !exists {
+		logger.SbiLog.Warnf("PDU Session %d not found for UE: %s", assignData.PduSessionId, ueContextId)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("PDU Session %d not found", assignData.PduSessionId),
+		}
+	}
+
+	response := &AssignedEbiData{
+		PduSessionId:    assignData.PduSessionId,
+		AssignedEbiList: []EbiArpMapping{},
+		FailedArpList:   []Arp{},
+		ReleasedEbiList: assignData.ReleasedEbiList,
+	}
+
+	if session.AllocatedEbis == nil {
+		session.AllocatedEbis = make(map[int32]int32)
+	}
+
+	nextEbi := s.getNextAvailableEbi(session)
+
+	for _, arp := range assignData.ArpList {
+		if nextEbi > 15 {
+			logger.SbiLog.Warnf("No more EBI available, adding to failed list")
+			response.FailedArpList = append(response.FailedArpList, arp)
+			continue
+		}
+
+		mapping := EbiArpMapping{
+			EpsBearerId: nextEbi,
+			Arp:         &arp,
+		}
+		response.AssignedEbiList = append(response.AssignedEbiList, mapping)
+
+		session.AllocatedEbis[nextEbi] = arp.PriorityLevel
+
+		nextEbi++
+	}
+
+	for _, releasedEbi := range assignData.ReleasedEbiList {
+		delete(session.AllocatedEbis, releasedEbi)
+		logger.SbiLog.Infof("Released EBI %d for PDU Session %d", releasedEbi, assignData.PduSessionId)
+	}
+
+	for _, modifiedEbi := range assignData.ModifiedEbiList {
+		if modifiedEbi.Arp != nil {
+			session.AllocatedEbis[modifiedEbi.EpsBearerId] = modifiedEbi.Arp.PriorityLevel
+			logger.SbiLog.Infof("Modified EBI %d for PDU Session %d", modifiedEbi.EpsBearerId, assignData.PduSessionId)
+		}
+	}
+
+	logger.SbiLog.Infof("EBI assignment complete. Assigned: %d, Failed: %d, Released: %d",
+		len(response.AssignedEbiList), len(response.FailedArpList), len(response.ReleasedEbiList))
+
+	return response, nil
+}
+
+func (s *Server) getNextAvailableEbi(session *context.PduSessionContext) int32 {
+	if session.AllocatedEbis == nil {
+		return 5
+	}
+
+	for ebi := int32(5); ebi <= 15; ebi++ {
+		if _, exists := session.AllocatedEbis[ebi]; !exists {
+			return ebi
+		}
+	}
+
+	return 16
+}

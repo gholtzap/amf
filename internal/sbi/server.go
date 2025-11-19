@@ -145,6 +145,20 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) > 1 && parts[1] == "assign-ebi" {
+		if r.Method == http.MethodPost {
+			s.handleAssignEbi(w, r, ueContextId)
+		} else {
+			sendProblemDetails(w, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Method Not Allowed",
+				Status: http.StatusMethodNotAllowed,
+				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+			})
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handleCreateUEContext(w, r, ueContextId)
@@ -665,6 +679,35 @@ func (s *Server) handleReleaseUEContext(w http.ResponseWriter, r *http.Request, 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAssignEbi(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Assign EBI for UE: %s", ueContextId)
+
+	var assignData AssignEbiData
+	if err := json.NewDecoder(r.Body).Decode(&assignData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.AssignEbi(ueContextId, &assignData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func sendProblemDetails(w http.ResponseWriter, problem *ProblemDetails) {

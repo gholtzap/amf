@@ -619,3 +619,32 @@ const (
 	RatSelectorEUTRA RatSelector = "E-UTRA"
 	RatSelectorNR    RatSelector = "NR"
 )
+
+type AssignEbiData struct {
+	PduSessionId    int32          `json:"pduSessionId"`
+	ArpList         []Arp          `json:"arpList,omitempty"`
+	ReleasedEbiList []int32        `json:"releasedEbiList,omitempty"`
+	OldGuami        *Guami         `json:"oldGuami,omitempty"`
+	ModifiedEbiList []EbiArpMapping `json:"modifiedEbiList,omitempty"`
+}
+
+type AssignedEbiData struct {
+	PduSessionId    int32           `json:"pduSessionId"`
+	AssignedEbiList []EbiArpMapping `json:"assignedEbiList,omitempty"`
+	FailedArpList   []Arp           `json:"failedArpList,omitempty"`
+	ReleasedEbiList []int32         `json:"releasedEbiList,omitempty"`
+}
+
+type AssignEbiError struct {
+	Error           *ProblemDetails `json:"error"`
+	FailedArpList   []Arp           `json:"failedArpList,omitempty"`
+	ReleasedEbiList []int32         `json:"releasedEbiList,omitempty"`
+}
+
+type EbiArpMapping struct {
+	EpsBearerId   int32 `json:"epsBearerId"`
+	Arp           *Arp  `json:"arp"`
+	RelSessionId  int32 `json:"relSessionId,omitempty"`
+}
+
+type EpsBearerId int32

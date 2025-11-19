@@ -118,6 +118,7 @@ type PduSessionContext struct {
 	SessionAmbr    *Ambr    // Session AMBR
 	QosFlows       map[int]*QosFlow
 	State          PduSessionState
+	AllocatedEbis  map[int32]int32 // EBI to ARP priority level mapping
 }
 
 // PduSessionState represents PDU Session state
