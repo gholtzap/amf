@@ -66,6 +66,9 @@ func (s *Server) registerRoutes() {
 
 	s.router.HandleFunc("/namf-mbs-comm/v1/n2-messages/transfer", s.handleMbsN2MessageTransfer)
 
+	s.router.HandleFunc("/namf-mbs-bc/v1/mbs-contexts", s.handleMbsBroadcastContexts)
+	s.router.HandleFunc("/namf-mbs-bc/v1/mbs-contexts/", s.handleMbsBroadcastContext)
+
 	s.router.HandleFunc("/health", s.handleHealthCheck)
 
 	logger.SbiLog.Info("SBI routes registered")
@@ -600,6 +603,156 @@ func (s *Server) handleMbsN2MessageTransfer(w http.ResponseWriter, r *http.Reque
 	response, problemDetails := s.MbsN2MessageTransfer(transferData, binaryParts)
 	if problemDetails != nil {
 		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleMbsBroadcastContexts(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Infof("Handle MBS Broadcast Contexts: %s %s", r.Method, r.URL.Path)
+
+	switch r.Method {
+	case http.MethodPost:
+		s.handleCreateMbsBroadcastContext(w, r)
+	default:
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+	}
+}
+
+func (s *Server) handleMbsBroadcastContext(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Infof("Handle MBS Broadcast Context: %s %s", r.Method, r.URL.Path)
+
+	path := r.URL.Path
+	prefix := "/namf-mbs-bc/v1/mbs-contexts/"
+	if !strings.HasPrefix(path, prefix) {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Invalid path format",
+		})
+		return
+	}
+
+	pathAfterPrefix := strings.TrimPrefix(path, prefix)
+	if pathAfterPrefix == "" {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "MBS Context Reference is required",
+		})
+		return
+	}
+
+	parts := strings.Split(pathAfterPrefix, "/")
+	mbsContextRef := parts[0]
+
+	if len(parts) > 1 && parts[1] == "update" {
+		if r.Method == http.MethodPost {
+			s.handleUpdateMbsBroadcastContext(w, r, mbsContextRef)
+		} else {
+			sendProblemDetails(w, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Method Not Allowed",
+				Status: http.StatusMethodNotAllowed,
+				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+			})
+		}
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		s.handleDeleteMbsBroadcastContext(w, mbsContextRef)
+	default:
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+	}
+}
+
+func (s *Server) handleCreateMbsBroadcastContext(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Info("Creating MBS Broadcast Context")
+
+	createData, binaryParts, err := parseMbsBroadcastCreateRequest(r)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to parse MBS Broadcast create request: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to parse request: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.CreateMbsBroadcastContext(createData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	mbsContextRef := generateMbsContextRef()
+	location := fmt.Sprintf("/namf-mbs-bc/v1/mbs-contexts/%s", mbsContextRef)
+	w.Header().Set("Location", location)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleDeleteMbsBroadcastContext(w http.ResponseWriter, mbsContextRef string) {
+	logger.SbiLog.Infof("Deleting MBS Broadcast Context: %s", mbsContextRef)
+
+	problemDetails := s.DeleteMbsBroadcastContext(mbsContextRef)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleUpdateMbsBroadcastContext(w http.ResponseWriter, r *http.Request, mbsContextRef string) {
+	logger.SbiLog.Infof("Updating MBS Broadcast Context: %s", mbsContextRef)
+
+	updateData, binaryParts, err := parseMbsBroadcastUpdateRequest(r)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to parse MBS Broadcast update request: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to parse request: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.UpdateMbsBroadcastContext(mbsContextRef, updateData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	if response == nil {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 

@@ -648,3 +648,99 @@ type EbiArpMapping struct {
 }
 
 type EpsBearerId int32
+
+type ContextCreateReqData struct {
+	MbsSessionId             *MbsSessionId        `json:"mbsSessionId"`
+	MbsServiceAreaInfoList   []MbsServiceAreaInfo `json:"mbsServiceAreaInfoList,omitempty"`
+	MbsServiceArea           *MbsServiceArea      `json:"mbsServiceArea,omitempty"`
+	N2MbsSmInfo              *N2MbsSmInfo         `json:"n2MbsSmInfo"`
+	NotifyUri                string               `json:"notifyUri"`
+	MaxResponseTime          int32                `json:"maxResponseTime,omitempty"`
+	Snssai                   *Snssai              `json:"snssai"`
+	MbsmfId                  string               `json:"mbsmfId,omitempty"`
+	MbsmfServiceInstId       string               `json:"mbsmfServiceInstId,omitempty"`
+	AssociatedSessionId      *AssociatedSessionId `json:"associatedSessionId,omitempty"`
+}
+
+type ContextCreateRspData struct {
+	MbsSessionId     *MbsSessionId  `json:"mbsSessionId"`
+	N2MbsSmInfoList  []N2MbsSmInfo  `json:"n2MbsSmInfoList,omitempty"`
+	OperationStatus  string         `json:"operationStatus,omitempty"`
+}
+
+type ContextUpdateReqData struct {
+	MbsServiceArea         *MbsServiceArea      `json:"mbsServiceArea,omitempty"`
+	MbsServiceAreaInfoList []MbsServiceAreaInfo `json:"mbsServiceAreaInfoList,omitempty"`
+	N2MbsSmInfo            *N2MbsSmInfo         `json:"n2MbsSmInfo,omitempty"`
+	RanIdList              []GlobalRanNodeId    `json:"ranIdList,omitempty"`
+	NoNgapSignallingInd    bool                 `json:"noNgapSignallingInd,omitempty"`
+	NotifyUri              string               `json:"notifyUri,omitempty"`
+	MaxResponseTime        int32                `json:"maxResponseTime,omitempty"`
+	N2MbsInfoChangeInd     bool                 `json:"n2MbsInfoChangeInd,omitempty"`
+}
+
+type ContextUpdateRspData struct {
+	N2MbsSmInfoList []N2MbsSmInfo `json:"n2MbsSmInfoList,omitempty"`
+	OperationStatus string        `json:"operationStatus,omitempty"`
+}
+
+type ContextStatusNotification struct {
+	MbsSessionId     *MbsSessionId    `json:"mbsSessionId"`
+	AreaSessionId    *AreaSessionId   `json:"areaSessionId,omitempty"`
+	N2MbsSmInfoList  []N2MbsSmInfo    `json:"n2MbsSmInfoList,omitempty"`
+	OperationEvents  []OperationEvent `json:"operationEvents,omitempty"`
+	OperationStatus  string           `json:"operationStatus,omitempty"`
+	ReleasedInd      bool             `json:"releasedInd,omitempty"`
+}
+
+type ContextStatusNotificationResponse struct {
+	MbsSessionId    *MbsSessionId  `json:"mbsSessionId"`
+	AreaSessionId   *AreaSessionId `json:"areaSessionId,omitempty"`
+	N2MbsSmInfoList []N2MbsSmInfo  `json:"n2MbsSmInfoList,omitempty"`
+}
+
+type OperationEvent struct {
+	OpEventType          string              `json:"opEventType"`
+	AmfId                string              `json:"amfId,omitempty"`
+	NgranFailureEventList []NgranFailureEvent `json:"ngranFailureEventList,omitempty"`
+}
+
+type NgranFailureEvent struct {
+	NgranId                *GlobalRanNodeId `json:"ngranId"`
+	NgranFailureIndication string           `json:"ngranFailureIndication,omitempty"`
+}
+
+type MbsServiceArea struct {
+	NcgiList []Ncgi `json:"ncgiList,omitempty"`
+	TaiList  []Tai  `json:"taiList,omitempty"`
+}
+
+type AssociatedSessionId struct {
+	PduSessionId int32  `json:"pduSessionId,omitempty"`
+	NsiId        string `json:"nsiId,omitempty"`
+}
+
+type OperationStatus string
+
+const (
+	OperationStatusMbsSessionStartComplete     OperationStatus = "MBS_SESSION_START_COMPLETE"
+	OperationStatusMbsSessionStartIncomplete   OperationStatus = "MBS_SESSION_START_INCOMPLETE"
+	OperationStatusMbsSessionUpdateComplete    OperationStatus = "MBS_SESSION_UPDATE_COMPLETE"
+	OperationStatusMbsSessionUpdateIncomplete  OperationStatus = "MBS_SESSION_UPDATE_INCOMPLETE"
+)
+
+type OpEventType string
+
+const (
+	OpEventTypeAmfChange     OpEventType = "AMF_CHANGE"
+	OpEventTypeNgRanEvent    OpEventType = "NG_RAN_EVENT"
+)
+
+type NgranFailureIndication string
+
+const (
+	NgranFailureIndicationNgRanRestartOrStart         NgranFailureIndication = "NG_RAN_RESTART_OR_START"
+	NgranFailureIndicationNgRanFailureWithoutRestart  NgranFailureIndication = "NG_RAN_FAILURE_WITHOUT_RESTART"
+	NgranFailureIndicationNgRanNotReachable           NgranFailureIndication = "NG_RAN_NOT_REACHABLE"
+	NgranFailureIndicationNgRanRequiredRelease        NgranFailureIndication = "NG_RAN_REQUIRED_RELEASE"
+)
