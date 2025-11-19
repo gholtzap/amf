@@ -415,3 +415,65 @@ func (s *Server) UEContextTransfer(ueContextId string, reqData *UeContextTransfe
 	logger.SbiLog.Infof("UE Context Transfer successful for UE: %s", ue.Supi)
 	return response, nil
 }
+
+func (s *Server) RegistrationStatusUpdate(ueContextId string, reqData *UeRegStatusUpdateReqData) (*UeRegStatusUpdateRspData, *ProblemDetails) {
+	logger.SbiLog.Infof("Registration Status Update for UE ID: %s, Transfer Status: %s", ueContextId, reqData.TransferStatus)
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	if reqData.TransferStatus == string(UeContextTransferStatusTransferred) {
+		logger.SbiLog.Infof("UE Context successfully transferred for UE: %s", ue.Supi)
+
+		for _, sessionId := range reqData.ToReleaseSessionList {
+			if session, exists := ue.PduSessions[sessionId]; exists {
+				logger.SbiLog.Infof("Releasing PDU Session %d for UE: %s", sessionId, ue.Supi)
+				delete(ue.PduSessions, sessionId)
+				logger.SbiLog.Infof("Released PDU Session %d (DNN: %s) for UE: %s", sessionId, session.Dnn, ue.Supi)
+			} else {
+				logger.SbiLog.Warnf("PDU Session %d not found for UE: %s", sessionId, ue.Supi)
+			}
+		}
+
+		for _, smfChangeInfo := range reqData.SmfChangeInfoList {
+			logger.SbiLog.Infof("SMF change indication: %s for PDU Sessions: %v", smfChangeInfo.SmfChangeInd, smfChangeInfo.PduSessionIdList)
+		}
+
+		if reqData.PcfReselectedInd {
+			logger.SbiLog.Infof("PCF reselection indicated for UE: %s", ue.Supi)
+		}
+
+		response := &UeRegStatusUpdateRspData{
+			RegStatusTransferComplete: true,
+		}
+
+		logger.SbiLog.Infof("Registration status update completed successfully for UE: %s", ue.Supi)
+		return response, nil
+	}
+
+	if reqData.TransferStatus == string(UeContextTransferStatusNotTransferred) {
+		logger.SbiLog.Warnf("UE Context transfer not completed for UE: %s", ue.Supi)
+
+		response := &UeRegStatusUpdateRspData{
+			RegStatusTransferComplete: false,
+		}
+
+		return response, nil
+	}
+
+	logger.SbiLog.Errorf("Invalid transfer status: %s", reqData.TransferStatus)
+	return nil, &ProblemDetails{
+		Type:   "about:blank",
+		Title:  "Bad Request",
+		Status: http.StatusBadRequest,
+		Detail: fmt.Sprintf("Invalid transfer status: %s", reqData.TransferStatus),
+	}
+}

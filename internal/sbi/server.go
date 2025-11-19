@@ -195,6 +195,20 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) > 1 && parts[1] == "transfer-update" {
+		if r.Method == http.MethodPost {
+			s.handleRegistrationStatusUpdate(w, r, ueContextId)
+		} else {
+			sendProblemDetails(w, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Method Not Allowed",
+				Status: http.StatusMethodNotAllowed,
+				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+			})
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handleCreateUEContext(w, r, ueContextId)
@@ -912,6 +926,35 @@ func (s *Server) handleUEContextTransfer(w http.ResponseWriter, r *http.Request,
 	}
 
 	response, problemDetails := s.UEContextTransfer(ueContextId, transferData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleRegistrationStatusUpdate(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Handle Registration Status Update for UE: %s", ueContextId)
+
+	var reqData UeRegStatusUpdateReqData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.RegistrationStatusUpdate(ueContextId, &reqData)
 	if problemDetails != nil {
 		sendProblemDetails(w, problemDetails)
 		return

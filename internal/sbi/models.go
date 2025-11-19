@@ -785,3 +785,34 @@ const (
 	TransferReasonMobiReg            TransferReason = "MOBI_REG"
 	TransferReasonMobiRegUeValidated TransferReason = "MOBI_REG_UE_VALIDATED"
 )
+
+type UeRegStatusUpdateReqData struct {
+	TransferStatus       string          `json:"transferStatus"`
+	ToReleaseSessionList []int32         `json:"toReleaseSessionList,omitempty"`
+	PcfReselectedInd     bool            `json:"pcfReselectedInd,omitempty"`
+	SmfChangeInfoList    []SmfChangeInfo `json:"smfChangeInfoList,omitempty"`
+	AnalyticsNotUsedList []string        `json:"analyticsNotUsedList,omitempty"`
+}
+
+type UeRegStatusUpdateRspData struct {
+	RegStatusTransferComplete bool `json:"regStatusTransferComplete"`
+}
+
+type SmfChangeInfo struct {
+	PduSessionIdList []int32 `json:"pduSessionIdList"`
+	SmfChangeInd     string  `json:"smfChangeInd"`
+}
+
+type UeContextTransferStatus string
+
+const (
+	UeContextTransferStatusTransferred    UeContextTransferStatus = "TRANSFERRED"
+	UeContextTransferStatusNotTransferred UeContextTransferStatus = "NOT_TRANSFERRED"
+)
+
+type SmfChangeIndication string
+
+const (
+	SmfChangeIndicationChanged SmfChangeIndication = "CHANGED"
+	SmfChangeIndicationRemoved SmfChangeIndication = "REMOVED"
+)
