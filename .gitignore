@@ -47,3 +47,14 @@ temp/
 dist/
 
 CLAUDE.md
+
+
+node_modules/
+dist/
+.env
+docs/3gpp/
+docs/3gpp/types
+coverage/
+*.coverage
+TODO.md
+.claude/*
