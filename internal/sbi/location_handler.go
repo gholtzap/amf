@@ -79,3 +79,90 @@ func (s *Server) ProvideLocationInfo(ueContextId string, requestData *RequestLoc
 	logger.SbiLog.Infof("Location info provided for UE: %s", ueContextId)
 	return response, nil
 }
+
+func (s *Server) ProvidePositioningInfo(ueContextId string, requestData *RequestPosInfo) (*ProvidePosInfoExt, *ProblemDetails) {
+	logger.SbiLog.Infof("Providing positioning info for UE ID: %s, LCS Client Type: %s", ueContextId, requestData.LcsClientType)
+
+	if err := validateUeContextId(ueContextId); err != nil {
+		logger.SbiLog.Errorf("Invalid UE Context ID format: %v", err)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Invalid UE Context ID format: %v", err),
+		}
+	}
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	if requestData.Supi != "" && ue.Supi != requestData.Supi {
+		logger.SbiLog.Warnf("SUPI mismatch: UE context has %s, request has %s", ue.Supi, requestData.Supi)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "SUPI mismatch",
+		}
+	}
+
+	response := &ProvidePosInfoExt{
+		SupportedFeatures: requestData.SupportedFeatures,
+	}
+
+	if ue.Tai.PlmnId.Mcc != "" {
+		lat := 37.7749
+		lon := -122.4194
+
+		response.LocationEstimate = &GeographicArea{
+			Point: &Point{
+				Lat: lat,
+				Lon: lon,
+			},
+		}
+
+		response.AccuracyFulfilmentInd = "REQUESTED_ACCURACY_FULFILLED"
+		response.AgeOfLocationEstimate = 5
+	}
+
+	if requestData.VelocityRequested != "" {
+		response.VelocityEstimate = &VelocityEstimate{
+			HSpeed:       50,
+			Bearing:      90,
+			HUncertainty: 10,
+		}
+	}
+
+	if ue.CellId != "" {
+		response.Ncgi = &Ncgi{
+			PlmnId: &PlmnId{
+				Mcc: ue.Tai.PlmnId.Mcc,
+				Mnc: ue.Tai.PlmnId.Mnc,
+			},
+			NrCellId: ue.CellId,
+		}
+	}
+
+	if requestData.LcsServiceType != "" {
+		logger.SbiLog.Infof("LCS Service Type: %s", requestData.LcsServiceType)
+	}
+
+	if requestData.Priority != "" {
+		logger.SbiLog.Infof("Priority: %s", requestData.Priority)
+	}
+
+	if requestData.LocationNotificationUri != "" {
+		logger.SbiLog.Infof("Location notification URI provided: %s", requestData.LocationNotificationUri)
+	}
+
+	logger.SbiLog.Infof("Positioning info provided for UE: %s", ueContextId)
+	return response, nil
+}

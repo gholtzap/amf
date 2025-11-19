@@ -466,6 +466,8 @@ func (s *Server) handleLocationService(w http.ResponseWriter, r *http.Request) {
 
 	if operation == "provide-loc-info" && r.Method == http.MethodPost {
 		s.handleProvideLocationInfo(w, r, ueContextId)
+	} else if operation == "provide-pos-info" && r.Method == http.MethodPost {
+		s.handleProvidePositioningInfo(w, r, ueContextId)
 	} else {
 		sendProblemDetails(w, &ProblemDetails{
 			Type:   "about:blank",
@@ -492,6 +494,35 @@ func (s *Server) handleProvideLocationInfo(w http.ResponseWriter, r *http.Reques
 	}
 
 	response, problemDetails := s.ProvideLocationInfo(ueContextId, &requestData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleProvidePositioningInfo(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Provide positioning info for UE: %s", ueContextId)
+
+	var requestData RequestPosInfo
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.ProvidePositioningInfo(ueContextId, &requestData)
 	if problemDetails != nil {
 		sendProblemDetails(w, problemDetails)
 		return

@@ -898,3 +898,81 @@ type N2InformationNotification struct {
 	GlobalRanNodeId        *GlobalRanNodeId `json:"globalRanNodeId,omitempty"`
 	AnType                 string           `json:"anType,omitempty"`
 }
+
+type RequestPosInfo struct {
+	LcsClientType           string   `json:"lcsClientType,omitempty"`
+	LcsLocation             string   `json:"lcsLocation,omitempty"`
+	Supi                    string   `json:"supi,omitempty"`
+	Gpsi                    string   `json:"gpsi,omitempty"`
+	Priority                string   `json:"priority,omitempty"`
+	LcsServiceType          string   `json:"lcsServiceType,omitempty"`
+	VelocityRequested       string   `json:"velocityRequested,omitempty"`
+	LcsSupportedGADShapes   string   `json:"lcsSupportedGADShapes,omitempty"`
+	LocationNotificationUri string   `json:"locationNotificationUri,omitempty"`
+	SupportedFeatures       string   `json:"supportedFeatures,omitempty"`
+	OldGuami                *Guami   `json:"oldGuami,omitempty"`
+	Pei                     string   `json:"pei,omitempty"`
+	HgmlcCallBackURI        string   `json:"hgmlcCallBackURI,omitempty"`
+	LdrType                 string   `json:"ldrType,omitempty"`
+	AfID                    string   `json:"afID,omitempty"`
+	ScheduledLocTime        string   `json:"scheduledLocTime,omitempty"`
+	ReliableLocReq          bool     `json:"reliableLocReq,omitempty"`
+}
+
+type ProvidePosInfoExt struct {
+	LocationEstimate       *GeographicArea `json:"locationEstimate,omitempty"`
+	AccuracyFulfilmentInd  string          `json:"accuracyFulfilmentInd,omitempty"`
+	AgeOfLocationEstimate  int32           `json:"ageOfLocationEstimate,omitempty"`
+	VelocityEstimate       *VelocityEstimate `json:"velocityEstimate,omitempty"`
+	CivicAddress           *CivicAddress   `json:"civicAddress,omitempty"`
+	PositioningDataList    []PositioningMethodAndUsage `json:"positioningDataList,omitempty"`
+	GnssPositioningDataList []GnssPositioningMethodAndUsage `json:"gnssPositioningDataList,omitempty"`
+	Ecgi                   *Ecgi           `json:"ecgi,omitempty"`
+	Ncgi                   *Ncgi           `json:"ncgi,omitempty"`
+	TargetMmeName          string          `json:"targetMmeName,omitempty"`
+	TargetMmeRealm         string          `json:"targetMmeRealm,omitempty"`
+	UtranSrvccInd          bool            `json:"utranSrvccInd,omitempty"`
+	UtranAccessInd         bool            `json:"utranAccessInd,omitempty"`
+	AchievedQos            string          `json:"achievedQos,omitempty"`
+	SupportedFeatures      string          `json:"supportedFeatures,omitempty"`
+}
+
+type VelocityEstimate struct {
+	HSpeed         int32  `json:"hSpeed,omitempty"`
+	Bearing        int32  `json:"bearing,omitempty"`
+	VSpeed         int32  `json:"vSpeed,omitempty"`
+	VDirection     string `json:"vDirection,omitempty"`
+	HUncertainty   int32  `json:"hUncertainty,omitempty"`
+	VUncertainty   int32  `json:"vUncertainty,omitempty"`
+}
+
+type CivicAddress struct {
+	Country     string `json:"country,omitempty"`
+	A1          string `json:"A1,omitempty"`
+	A2          string `json:"A2,omitempty"`
+	A3          string `json:"A3,omitempty"`
+	A4          string `json:"A4,omitempty"`
+	A5          string `json:"A5,omitempty"`
+	A6          string `json:"A6,omitempty"`
+	PRD         string `json:"PRD,omitempty"`
+	POD         string `json:"POD,omitempty"`
+	STS         string `json:"STS,omitempty"`
+	HNO         string `json:"HNO,omitempty"`
+	HNS         string `json:"HNS,omitempty"`
+	LMK         string `json:"LMK,omitempty"`
+	LOC         string `json:"LOC,omitempty"`
+	NAM         string `json:"NAM,omitempty"`
+	PC          string `json:"PC,omitempty"`
+}
+
+type PositioningMethodAndUsage struct {
+	Method string `json:"method"`
+	Mode   string `json:"mode,omitempty"`
+	Usage  string `json:"usage,omitempty"`
+}
+
+type GnssPositioningMethodAndUsage struct {
+	GnssId string `json:"gnssId"`
+	Mode   string `json:"mode,omitempty"`
+	Usage  string `json:"usage,omitempty"`
+}
