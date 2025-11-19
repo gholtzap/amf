@@ -79,8 +79,7 @@ func (s *Server) handleUEContexts(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-
-		w.WriteHeader(http.StatusNotImplemented)
+		s.handleQueryUEContexts(w, r)
 	default:
 		sendProblemDetails(w, &ProblemDetails{
 			Type:   "about:blank",
@@ -88,6 +87,26 @@ func (s *Server) handleUEContexts(w http.ResponseWriter, r *http.Request) {
 			Status: http.StatusMethodNotAllowed,
 			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
 		})
+	}
+}
+
+func (s *Server) handleQueryUEContexts(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Info("Querying UE Contexts")
+
+	supi := r.URL.Query().Get("supi")
+	gpsi := r.URL.Query().Get("gpsi")
+
+	result, problemDetails := s.QueryUEContexts(supi, gpsi)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
 	}
 }
 

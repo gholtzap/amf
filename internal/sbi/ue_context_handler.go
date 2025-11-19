@@ -311,3 +311,68 @@ func (s *Server) getNextAvailableEbi(session *context.PduSessionContext) int32 {
 
 	return 16
 }
+
+func (s *Server) QueryUEContexts(supi string, gpsi string) (*UeContextSearchResult, *ProblemDetails) {
+	logger.SbiLog.Infof("Querying UE Contexts - SUPI: %s, GPSI: %s", supi, gpsi)
+
+	result := &UeContextSearchResult{
+		UeContexts: []SearchedUeContext{},
+		TotalCount: 0,
+	}
+
+	s.amfContext.UeContexts.Range(func(key, value interface{}) bool {
+		ue := value.(*context.UEContext)
+
+		if supi != "" && ue.Supi != supi {
+			return true
+		}
+
+		var ueContextId string
+		if ue.Supi != "" {
+			ueContextId = ue.Supi
+		} else if ue.Guti != "" {
+			ueContextId = "5g-guti-" + ue.Guti
+		} else {
+			ueContextId = fmt.Sprintf("amf-ue-ngap-id-%d", ue.AmfUeNgapId)
+		}
+
+		accessType := ""
+		switch ue.AccessType {
+		case context.AccessType3GPP:
+			accessType = "3GPP_ACCESS"
+		case context.AccessTypeNon3GPP:
+			accessType = "NON_3GPP_ACCESS"
+		}
+
+		var tai *Tai
+		if ue.Tai.PlmnId.Mcc != "" {
+			tai = &Tai{
+				PlmnId: &PlmnId{
+					Mcc: ue.Tai.PlmnId.Mcc,
+					Mnc: ue.Tai.PlmnId.Mnc,
+				},
+				Tac: ue.Tai.Tac,
+			}
+		}
+
+		ueInfo := SearchedUeContext{
+			UeContextId:     ueContextId,
+			Supi:            ue.Supi,
+			AmfUeNgapId:     ue.AmfUeNgapId,
+			Pei:             ue.Pei,
+			AccessType:      accessType,
+			CmState:         string(ue.CmState),
+			RmState:         string(ue.RmState),
+			Tai:             tai,
+			PduSessionCount: len(ue.PduSessions),
+		}
+
+		result.UeContexts = append(result.UeContexts, ueInfo)
+		result.TotalCount++
+
+		return true
+	})
+
+	logger.SbiLog.Infof("Found %d UE contexts", result.TotalCount)
+	return result, nil
+}

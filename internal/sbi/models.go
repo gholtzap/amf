@@ -744,3 +744,20 @@ const (
 	NgranFailureIndicationNgRanNotReachable           NgranFailureIndication = "NG_RAN_NOT_REACHABLE"
 	NgranFailureIndicationNgRanRequiredRelease        NgranFailureIndication = "NG_RAN_REQUIRED_RELEASE"
 )
+
+type SearchedUeContext struct {
+	UeContextId      string  `json:"ueContextId,omitempty"`
+	Supi             string  `json:"supi,omitempty"`
+	AmfUeNgapId      int64   `json:"amfUeNgapId,omitempty"`
+	Pei              string  `json:"pei,omitempty"`
+	AccessType       string  `json:"accessType,omitempty"`
+	CmState          string  `json:"cmState,omitempty"`
+	RmState          string  `json:"rmState,omitempty"`
+	Tai              *Tai    `json:"tai,omitempty"`
+	PduSessionCount  int     `json:"pduSessionCount,omitempty"`
+}
+
+type UeContextSearchResult struct {
+	UeContexts []SearchedUeContext `json:"ueContexts"`
+	TotalCount int                 `json:"totalCount"`
+}
