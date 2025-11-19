@@ -1,10 +1,16 @@
 package sbi
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/logger"
@@ -48,7 +54,6 @@ func (s *Server) registerRoutes() {
 
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts", s.handleUEContexts)
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts/", s.handleUEContext)
-	s.router.HandleFunc("/namf-comm/v1/n1-n2-messages", s.handleN1N2MessageTransfer)
 
 	s.router.HandleFunc("/namf-evts/v1/subscriptions", s.handleEventSubscriptions)
 	s.router.HandleFunc("/namf-evts/v1/subscriptions/", s.handleEventSubscription)
@@ -122,6 +127,20 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) > 1 && parts[1] == "n1-n2-messages" {
+		if r.Method == http.MethodPost {
+			s.handleN1N2MessageTransfer(w, r, ueContextId)
+		} else {
+			sendProblemDetails(w, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Method Not Allowed",
+				Status: http.StatusMethodNotAllowed,
+				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+			})
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handleCreateUEContext(w, r, ueContextId)
@@ -135,22 +154,143 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleN1N2MessageTransfer(w http.ResponseWriter, r *http.Request) {
-	logger.SbiLog.Infof("Handle N1N2 Message Transfer: %s %s", r.Method, r.URL.Path)
+func (s *Server) handleN1N2MessageTransfer(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Handle N1N2 Message Transfer for UE: %s, %s %s", ueContextId, r.Method, r.URL.Path)
 
-	w.WriteHeader(http.StatusNotImplemented)
+	if r.Method != http.MethodPost {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+		return
+	}
+
+	transferData, binaryParts, err := parseN1N2TransferRequest(r)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to parse N1N2 transfer request: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to parse request: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.N1N2MessageTransfer(ueContextId, transferData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	location := fmt.Sprintf("/namf-comm/v1/ue-contexts/%s/n1-n2-messages/%s", ueContextId, generateTransferId())
+	w.Header().Set("Location", location)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleEventSubscriptions(w http.ResponseWriter, r *http.Request) {
 	logger.SbiLog.Infof("Handle Event Subscriptions: %s %s", r.Method, r.URL.Path)
 
-	w.WriteHeader(http.StatusNotImplemented)
+	switch r.Method {
+	case http.MethodPost:
+		s.handleCreateEventSubscription(w, r)
+	default:
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+	}
+}
+
+func (s *Server) handleCreateEventSubscription(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Info("Creating event subscription")
+
+	var createData AmfCreateEventSubscription
+	if err := json.NewDecoder(r.Body).Decode(&createData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.CreateEventSubscription(&createData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	location := fmt.Sprintf("/namf-evts/v1/subscriptions/%s", response.SubscriptionId)
+	w.Header().Set("Location", location)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleEventSubscription(w http.ResponseWriter, r *http.Request) {
 	logger.SbiLog.Infof("Handle Event Subscription: %s %s", r.Method, r.URL.Path)
 
-	w.WriteHeader(http.StatusNotImplemented)
+	path := r.URL.Path
+	prefix := "/namf-evts/v1/subscriptions/"
+	if !strings.HasPrefix(path, prefix) {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Invalid path format",
+		})
+		return
+	}
+
+	subscriptionId := strings.TrimPrefix(path, prefix)
+	if subscriptionId == "" {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Subscription ID is required",
+		})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		s.handleDeleteEventSubscription(w, subscriptionId)
+	default:
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+	}
+}
+
+func (s *Server) handleDeleteEventSubscription(w http.ResponseWriter, subscriptionId string) {
+	logger.SbiLog.Infof("Deleting event subscription: %s", subscriptionId)
+
+	problemDetails := s.DeleteEventSubscription(subscriptionId)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleProvideLocationInfo(w http.ResponseWriter, r *http.Request) {
@@ -242,4 +382,88 @@ func sendProblemDetails(w http.ResponseWriter, problem *ProblemDetails) {
 	if err := json.NewEncoder(w).Encode(problem); err != nil {
 		logger.SbiLog.Errorf("Failed to encode problem details: %v", err)
 	}
+}
+
+func generateTransferId() string {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "transfer-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func parseN1N2TransferRequest(r *http.Request) (*N1N2MessageTransferReqData, map[string][]byte, error) {
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "application/json") {
+		var reqData N1N2MessageTransferReqData
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+
+		if err := json.Unmarshal(body, &reqData); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
+
+		return &reqData, nil, nil
+	}
+
+	if strings.Contains(contentType, "multipart/related") {
+		mediaType, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse content type: %w", err)
+		}
+
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			return nil, nil, fmt.Errorf("expected multipart content type")
+		}
+
+		boundary := params["boundary"]
+		if boundary == "" {
+			return nil, nil, fmt.Errorf("boundary not found in content type")
+		}
+
+		reader := multipart.NewReader(r.Body, boundary)
+		var reqData *N1N2MessageTransferReqData
+		binaryParts := make(map[string][]byte)
+
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read multipart: %w", err)
+			}
+
+			partContentType := part.Header.Get("Content-Type")
+			contentId := strings.Trim(part.Header.Get("Content-Id"), "<>")
+
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read part data: %w", err)
+			}
+
+			if strings.Contains(partContentType, "application/json") {
+				var jsonData N1N2MessageTransferReqData
+				if err := json.Unmarshal(data, &jsonData); err != nil {
+					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
+				}
+				reqData = &jsonData
+			} else if contentId != "" {
+				binaryParts[contentId] = data
+			}
+
+			part.Close()
+		}
+
+		if reqData == nil {
+			return nil, nil, fmt.Errorf("JSON data part not found in multipart request")
+		}
+
+		return reqData, binaryParts, nil
+	}
+
+	return nil, nil, fmt.Errorf("unsupported Content-Type: %s", contentType)
 }

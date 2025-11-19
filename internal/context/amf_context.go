@@ -20,6 +20,8 @@ type AMFContext struct {
 
 	RanContexts sync.Map
 
+	EventSubscriptions sync.Map
+
 	NfId string
 
 	mu sync.RWMutex
@@ -87,4 +89,18 @@ func (c *AMFContext) DeleteUEContext(amfUeNgapId int64) {
 func (c *AMFContext) allocateAmfUeNgapId() int64 {
 
 	return 1
+}
+
+func (c *AMFContext) StoreEventSubscription(subscriptionId string, subscription interface{}) {
+	c.EventSubscriptions.Store(subscriptionId, subscription)
+	logger.CtxLog.Infof("Event subscription stored: %s", subscriptionId)
+}
+
+func (c *AMFContext) GetEventSubscription(subscriptionId string) (interface{}, bool) {
+	return c.EventSubscriptions.Load(subscriptionId)
+}
+
+func (c *AMFContext) DeleteEventSubscription(subscriptionId string) {
+	c.EventSubscriptions.Delete(subscriptionId)
+	logger.CtxLog.Infof("Event subscription deleted: %s", subscriptionId)
 }

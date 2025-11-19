@@ -208,6 +208,72 @@ type ProblemDetails struct {
 	Cause    string `json:"cause,omitempty"`
 }
 
+type N1N2MessageTransferReqData struct {
+	N1MessageContainer *N1MessageContainer `json:"n1MessageContainer,omitempty"`
+	N2InfoContainer    *N2InfoContainer    `json:"n2InfoContainer,omitempty"`
+	MtData             *RefToBinaryData    `json:"mtData,omitempty"`
+	SkipInd            bool                `json:"skipInd,omitempty"`
+	LastMsgIndication  bool                `json:"lastMsgIndication,omitempty"`
+	PduSessionId       int32               `json:"pduSessionId,omitempty"`
+	LcsCorrelationId   string              `json:"lcsCorrelationId,omitempty"`
+	Ppi                int32               `json:"ppi,omitempty"`
+	Arp5qi             int32               `json:"arp5qi,omitempty"`
+}
+
+type N1MessageContainer struct {
+	N1MessageClass   string           `json:"n1MessageClass"`
+	N1MessageContent *RefToBinaryData `json:"n1MessageContent"`
+	NfId             string           `json:"nfId,omitempty"`
+}
+
+type N2InfoContainer struct {
+	N2InformationClass string           `json:"n2InformationClass"`
+	SmInfo             *N2SmInformation `json:"smInfo,omitempty"`
+	RanInfo            *N2RanInformation `json:"ranInfo,omitempty"`
+	NrppaInfo          *N2NrppaInformation `json:"nrppaInfo,omitempty"`
+	PwsInfo            *N2PwsInformation `json:"pwsInfo,omitempty"`
+	NfId               string           `json:"nfId,omitempty"`
+}
+
+type N2SmInformation struct {
+	PduSessionId int32            `json:"pduSessionId"`
+	N2InfoContent *RefToBinaryData `json:"n2InfoContent"`
+	SNssai       *Snssai          `json:"sNssai,omitempty"`
+}
+
+type N2RanInformation struct {
+	N2InfoContent *RefToBinaryData `json:"n2InfoContent"`
+}
+
+type N2NrppaInformation struct {
+	NrppaPdu         *RefToBinaryData `json:"nrppaPdu"`
+	NfId             string           `json:"nfId,omitempty"`
+}
+
+type N2PwsInformation struct {
+	PwsContainer     *RefToBinaryData `json:"pwsContainer"`
+	NgapMessageType  int32            `json:"ngapMessageType,omitempty"`
+}
+
+type RefToBinaryData struct {
+	ContentId string `json:"contentId"`
+}
+
+type N1N2MessageTransferRspData struct {
+	Cause             string `json:"cause"`
+	SupportedFeatures string `json:"supportedFeatures,omitempty"`
+}
+
+type N1N2MessageTransferError struct {
+	Error             *ProblemDetails                 `json:"error"`
+	PwsErrorInfo      *PwsErrorData                   `json:"pwsErrorInfo,omitempty"`
+}
+
+type PwsErrorData struct {
+	NgapMessageType   int32    `json:"ngapMessageType,omitempty"`
+	FailedNgapData    []byte   `json:"failedNgapData,omitempty"`
+}
+
 func ToInternalTai(tai *Tai) context.Tai {
 	if tai == nil {
 		return context.Tai{}
@@ -246,4 +312,61 @@ func ToSbiSnssai(snssai context.Snssai) *Snssai {
 		Sst: snssai.Sst,
 		Sd:  snssai.Sd,
 	}
+}
+
+type AmfEventSubscription struct {
+	EventList                     []AmfEvent `json:"eventList"`
+	EventNotifyUri                string     `json:"eventNotifyUri"`
+	NotifyCorrelationId           string     `json:"notifyCorrelationId"`
+	NfId                          string     `json:"nfId"`
+	SubsChangeNotifyUri           string     `json:"subsChangeNotifyUri,omitempty"`
+	SubsChangeNotifyCorrelationId string     `json:"subsChangeNotifyCorrelationId,omitempty"`
+	Supi                          string     `json:"supi,omitempty"`
+	GroupId                       string     `json:"groupId,omitempty"`
+	Gpsi                          string     `json:"gpsi,omitempty"`
+	Pei                           string     `json:"pei,omitempty"`
+	AnyUE                         bool       `json:"anyUE,omitempty"`
+	Options                       *AmfEventMode `json:"options,omitempty"`
+}
+
+type AmfEvent struct {
+	Type          string   `json:"type"`
+	ImmediateFlag bool     `json:"immediateFlag,omitempty"`
+	AreaList      []AmfEventArea `json:"areaList,omitempty"`
+}
+
+type AmfEventArea struct {
+	PresenceInfo *PresenceInfo `json:"presenceInfo,omitempty"`
+	SNssai       *Snssai       `json:"sNssai,omitempty"`
+}
+
+type PresenceInfo struct {
+	PraId           string `json:"praId,omitempty"`
+	PresenceState   string `json:"presenceState,omitempty"`
+	TrackingAreaList []Tai `json:"trackingAreaList,omitempty"`
+}
+
+type AmfEventMode struct {
+	Trigger          string `json:"trigger,omitempty"`
+	MaxReports       int32  `json:"maxReports,omitempty"`
+	Expiry           string `json:"expiry,omitempty"`
+}
+
+type AmfCreateEventSubscription struct {
+	Subscription      *AmfEventSubscription `json:"subscription"`
+	SupportedFeatures string                `json:"supportedFeatures,omitempty"`
+}
+
+type AmfCreatedEventSubscription struct {
+	Subscription      *AmfEventSubscription `json:"subscription"`
+	SubscriptionId    string                `json:"subscriptionId"`
+	ReportList        []AmfEventReport      `json:"reportList,omitempty"`
+	SupportedFeatures string                `json:"supportedFeatures,omitempty"`
+}
+
+type AmfEventReport struct {
+	Type      string `json:"type"`
+	State     string `json:"state,omitempty"`
+	TimeStamp string `json:"timeStamp,omitempty"`
+	Supi      string `json:"supi,omitempty"`
 }
