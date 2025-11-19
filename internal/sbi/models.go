@@ -872,3 +872,29 @@ type AmfStatusInfo struct {
 	TargetAmfRemoval   string  `json:"targetAmfRemoval,omitempty"`
 	TargetAmfFailure   string  `json:"targetAmfFailure,omitempty"`
 }
+
+type NonUeN2InfoSubscriptionCreateData struct {
+	GlobalRanNodeList  []GlobalRanNodeId `json:"globalRanNodeList,omitempty"`
+	AnTypeList         []string          `json:"anTypeList,omitempty"`
+	N2InformationClass string            `json:"n2InformationClass"`
+	N2NotifyCallbackUri string           `json:"n2NotifyCallbackUri"`
+	NfId               string            `json:"nfId,omitempty"`
+	SupportedFeatures  string            `json:"supportedFeatures,omitempty"`
+	NotifCorrelationId string            `json:"notifCorrelationId,omitempty"`
+}
+
+type NonUeN2InfoSubscriptionCreatedData struct {
+	N2NotifySubscriptionId string `json:"n2NotifySubscriptionId"`
+	SupportedFeatures      string `json:"supportedFeatures,omitempty"`
+	N2InformationClass     string `json:"n2InformationClass,omitempty"`
+}
+
+type N2InformationNotification struct {
+	N2NotifySubscriptionId string           `json:"n2NotifySubscriptionId"`
+	N2InfoContainer        *N2InfoContainer `json:"n2InfoContainer,omitempty"`
+	ToReleaseSessionList   []int32          `json:"toReleaseSessionList,omitempty"`
+	LcsCorrelationId       string           `json:"lcsCorrelationId,omitempty"`
+	NotifyCorrelationId    string           `json:"notifyCorrelationId,omitempty"`
+	GlobalRanNodeId        *GlobalRanNodeId `json:"globalRanNodeId,omitempty"`
+	AnType                 string           `json:"anType,omitempty"`
+}

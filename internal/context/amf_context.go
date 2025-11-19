@@ -26,6 +26,8 @@ type AMFContext struct {
 
 	AMFStatusSubscriptions sync.Map
 
+	NonUeN2InfoSubscriptions sync.Map
+
 	NfId string
 
 	mu sync.RWMutex
