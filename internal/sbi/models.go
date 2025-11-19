@@ -559,3 +559,63 @@ const (
 	RanFailureIndicationNG_RAN_FAILURE_WITHOUT_RESTART RanFailureIndication = "NG_RAN_FAILURE_WITHOUT_RESTART"
 	RanFailureIndicationNG_RAN_NOT_REACHABLE           RanFailureIndication = "NG_RAN_NOT_REACHABLE"
 )
+
+type N2InformationTransferReqData struct {
+	TaiList           []Tai              `json:"taiList,omitempty"`
+	RatSelector       string             `json:"ratSelector,omitempty"`
+	GlobalRanNodeList []GlobalRanNodeId  `json:"globalRanNodeList,omitempty"`
+	N2Information     *N2InfoContainer   `json:"n2Information,omitempty"`
+	SupportedFeatures string             `json:"supportedFeatures,omitempty"`
+}
+
+type N2InformationTransferRspData struct {
+	Result            string              `json:"result"`
+	PwsRspData        *PWSResponseData    `json:"pwsRspData,omitempty"`
+	SupportedFeatures string              `json:"supportedFeatures,omitempty"`
+	TssRspPerNgranList []TssRspPerNgran   `json:"tssRspPerNgranList,omitempty"`
+}
+
+type N2InformationTransferError struct {
+	Error        *ProblemDetails `json:"error"`
+	PwsErrorInfo *PWSErrorData   `json:"pwsErrorInfo,omitempty"`
+}
+
+type PWSResponseData struct {
+	NgapMessageType    int32  `json:"ngapMessageType,omitempty"`
+	SerialNumber       int32  `json:"serialNumber,omitempty"`
+	MessageIdentifier  int32  `json:"messageIdentifier,omitempty"`
+	UnknownTaiList     []Tai  `json:"unknownTaiList,omitempty"`
+	N2PwsSubMissInd    bool   `json:"n2PwsSubMissInd,omitempty"`
+}
+
+type PWSErrorData struct {
+	NgapMessageType int32  `json:"ngapMessageType,omitempty"`
+	FailedNgapData  []byte `json:"failedNgapData,omitempty"`
+}
+
+type TssRspPerNgran struct {
+	NgranId          *GlobalRanNodeId  `json:"ngranId"`
+	NgranFailureInfo *NgranFailureInfo `json:"ngranFailureInfo,omitempty"`
+	TssContainer     *N2InfoContent    `json:"tssContainer,omitempty"`
+}
+
+type NgranFailureInfo struct {
+	NgranCause *NgApCause `json:"ngranCause"`
+}
+
+type N2InfoContent struct {
+	NgapData *RefToBinaryData `json:"ngapData"`
+}
+
+type N2InformationTransferResult string
+
+const (
+	N2InformationTransferResultINITIATED N2InformationTransferResult = "N2_INFO_TRANSFER_INITIATED"
+)
+
+type RatSelector string
+
+const (
+	RatSelectorEUTRA RatSelector = "E-UTRA"
+	RatSelectorNR    RatSelector = "NR"
+)

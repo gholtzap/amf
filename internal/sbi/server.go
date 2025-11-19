@@ -55,6 +55,8 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts", s.handleUEContexts)
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts/", s.handleUEContext)
 
+	s.router.HandleFunc("/namf-comm/v1/non-ue-n2-messages/transfer", s.handleNonUeN2MessageTransfer)
+
 	s.router.HandleFunc("/namf-evts/v1/subscriptions", s.handleEventSubscriptions)
 	s.router.HandleFunc("/namf-evts/v1/subscriptions/", s.handleEventSubscription)
 
@@ -517,6 +519,45 @@ func (s *Server) handleEnableGroupReachability(w http.ResponseWriter, r *http.Re
 	}
 }
 
+func (s *Server) handleNonUeN2MessageTransfer(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Infof("Handle Non-UE N2 Message Transfer: %s %s", r.Method, r.URL.Path)
+
+	if r.Method != http.MethodPost {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+		return
+	}
+
+	transferData, binaryParts, err := parseN2TransferRequest(r)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to parse Non-UE N2 transfer request: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to parse request: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.NonUeN2MessageTransfer(transferData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
 func (s *Server) handleMbsN2MessageTransfer(w http.ResponseWriter, r *http.Request) {
 	logger.SbiLog.Infof("Handle MBS N2 Message Transfer: %s %s", r.Method, r.URL.Path)
 
@@ -698,6 +739,82 @@ func parseN1N2TransferRequest(r *http.Request) (*N1N2MessageTransferReqData, map
 
 			if strings.Contains(partContentType, "application/json") {
 				var jsonData N1N2MessageTransferReqData
+				if err := json.Unmarshal(data, &jsonData); err != nil {
+					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
+				}
+				reqData = &jsonData
+			} else if contentId != "" {
+				binaryParts[contentId] = data
+			}
+
+			part.Close()
+		}
+
+		if reqData == nil {
+			return nil, nil, fmt.Errorf("JSON data part not found in multipart request")
+		}
+
+		return reqData, binaryParts, nil
+	}
+
+	return nil, nil, fmt.Errorf("unsupported Content-Type: %s", contentType)
+}
+
+func parseN2TransferRequest(r *http.Request) (*N2InformationTransferReqData, map[string][]byte, error) {
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "application/json") {
+		var reqData N2InformationTransferReqData
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+
+		if err := json.Unmarshal(body, &reqData); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
+
+		return &reqData, nil, nil
+	}
+
+	if strings.Contains(contentType, "multipart/related") {
+		mediaType, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse content type: %w", err)
+		}
+
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			return nil, nil, fmt.Errorf("expected multipart content type")
+		}
+
+		boundary := params["boundary"]
+		if boundary == "" {
+			return nil, nil, fmt.Errorf("boundary not found in content type")
+		}
+
+		reader := multipart.NewReader(r.Body, boundary)
+		var reqData *N2InformationTransferReqData
+		binaryParts := make(map[string][]byte)
+
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read multipart: %w", err)
+			}
+
+			partContentType := part.Header.Get("Content-Type")
+			contentId := strings.Trim(part.Header.Get("Content-Id"), "<>")
+
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read part data: %w", err)
+			}
+
+			if strings.Contains(partContentType, "application/json") {
+				var jsonData N2InformationTransferReqData
 				if err := json.Unmarshal(data, &jsonData); err != nil {
 					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
 				}
