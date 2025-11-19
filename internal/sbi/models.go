@@ -497,3 +497,65 @@ type ReachableUeInfo struct {
 	UeList       []string      `json:"ueList"`
 	UserLocation *UserLocation `json:"userLocation,omitempty"`
 }
+
+type MbsN2MessageTransferReqData struct {
+	MbsSessionId       *MbsSessionId        `json:"mbsSessionId"`
+	AreaSessionId      *AreaSessionId       `json:"areaSessionId,omitempty"`
+	N2MbsSmInfo        *N2MbsSmInfo         `json:"n2MbsSmInfo"`
+	SupportedFeatures  string               `json:"supportedFeatures,omitempty"`
+	RanNodeIdList      []GlobalRanNodeId    `json:"ranNodeIdList,omitempty"`
+	NotifyUri          string               `json:"notifyUri,omitempty"`
+	NotifyCorrelationId string              `json:"notifyCorrelationId,omitempty"`
+}
+
+type MbsN2MessageTransferRspData struct {
+	Result             string        `json:"result"`
+	SupportedFeatures  string        `json:"supportedFeatures,omitempty"`
+	FailureList        []RanFailure  `json:"failureList,omitempty"`
+}
+
+type N2MbsSmInfo struct {
+	NgapIeType string           `json:"ngapIeType"`
+	NgapData   *RefToBinaryData `json:"ngapData"`
+}
+
+type RanFailure struct {
+	RanId                *GlobalRanNodeId     `json:"ranId"`
+	RanFailureCause      *NgApCause           `json:"ranFailureCause,omitempty"`
+	RanFailureIndication string               `json:"ranFailureIndication,omitempty"`
+}
+
+type MbsSessionId struct {
+	Tmgi        *Tmgi   `json:"tmgi,omitempty"`
+	Ssm         *Ssm    `json:"ssm,omitempty"`
+	Nid         string  `json:"nid,omitempty"`
+}
+
+type AreaSessionId int32
+
+type Ssm struct {
+	SourceIpAddr  string `json:"sourceIpAddr"`
+	DestIpAddr    string `json:"destIpAddr"`
+}
+
+type MbsNotification struct {
+	MbsSessionId        *MbsSessionId `json:"mbsSessionId"`
+	AreaSessionId       *AreaSessionId `json:"areaSessionId,omitempty"`
+	FailureList         []RanFailure  `json:"failureList"`
+	NotifyCorrelationId string        `json:"notifyCorrelationId,omitempty"`
+}
+
+type MbsNgapIeType string
+
+const (
+	MbsNgapIeTypeMBS_SES_ACT_REQ    MbsNgapIeType = "MBS_SES_ACT_REQ"
+	MbsNgapIeTypeMBS_SES_DEACT_REQ  MbsNgapIeType = "MBS_SES_DEACT_REQ"
+	MbsNgapIeTypeMBS_SES_UPD_REQ    MbsNgapIeType = "MBS_SES_UPD_REQ"
+)
+
+type RanFailureIndication string
+
+const (
+	RanFailureIndicationNG_RAN_FAILURE_WITHOUT_RESTART RanFailureIndication = "NG_RAN_FAILURE_WITHOUT_RESTART"
+	RanFailureIndicationNG_RAN_NOT_REACHABLE           RanFailureIndication = "NG_RAN_NOT_REACHABLE"
+)
