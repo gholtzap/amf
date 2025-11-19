@@ -856,3 +856,19 @@ type UeN1N2InfoSubscriptionCreatedData struct {
 	N1n2NotifySubscriptionId string `json:"n1n2NotifySubscriptionId"`
 	SupportedFeatures        string `json:"supportedFeatures,omitempty"`
 }
+
+type SubscriptionData struct {
+	AmfStatusUri string   `json:"amfStatusUri"`
+	GuamiList    []Guami  `json:"guamiList,omitempty"`
+}
+
+type AmfStatusChangeNotification struct {
+	AmfStatusInfoList []AmfStatusInfo `json:"amfStatusInfoList"`
+}
+
+type AmfStatusInfo struct {
+	GuamiList          []Guami `json:"guamiList"`
+	StatusChange       string  `json:"statusChange,omitempty"`
+	TargetAmfRemoval   string  `json:"targetAmfRemoval,omitempty"`
+	TargetAmfFailure   string  `json:"targetAmfFailure,omitempty"`
+}

@@ -24,6 +24,8 @@ type AMFContext struct {
 
 	N1N2Subscriptions sync.Map
 
+	AMFStatusSubscriptions sync.Map
+
 	NfId string
 
 	mu sync.RWMutex
@@ -123,6 +125,20 @@ func (c *AMFContext) GetN1N2Subscription(subscriptionId string) (*N1N2Subscripti
 func (c *AMFContext) DeleteN1N2Subscription(subscriptionId string) {
 	c.N1N2Subscriptions.Delete(subscriptionId)
 	logger.CtxLog.Infof("N1N2 subscription deleted: %s", subscriptionId)
+}
+
+func (c *AMFContext) StoreAMFStatusSubscription(subscriptionId string, subscription interface{}) {
+	c.AMFStatusSubscriptions.Store(subscriptionId, subscription)
+	logger.CtxLog.Infof("AMF status subscription stored: %s", subscriptionId)
+}
+
+func (c *AMFContext) GetAMFStatusSubscription(subscriptionId string) (interface{}, bool) {
+	return c.AMFStatusSubscriptions.Load(subscriptionId)
+}
+
+func (c *AMFContext) DeleteAMFStatusSubscription(subscriptionId string) {
+	c.AMFStatusSubscriptions.Delete(subscriptionId)
+	logger.CtxLog.Infof("AMF status subscription deleted: %s", subscriptionId)
 }
 
 type N1N2Subscription struct {

@@ -57,6 +57,9 @@ func (s *Server) registerRoutes() {
 
 	s.router.HandleFunc("/namf-comm/v1/non-ue-n2-messages/transfer", s.handleNonUeN2MessageTransfer)
 
+	s.router.HandleFunc("/namf-comm/v1/subscriptions", s.handleAMFStatusSubscriptions)
+	s.router.HandleFunc("/namf-comm/v1/subscriptions/", s.handleAMFStatusSubscription)
+
 	s.router.HandleFunc("/namf-evts/v1/subscriptions", s.handleEventSubscriptions)
 	s.router.HandleFunc("/namf-evts/v1/subscriptions/", s.handleEventSubscription)
 
