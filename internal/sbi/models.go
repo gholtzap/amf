@@ -816,3 +816,28 @@ const (
 	SmfChangeIndicationChanged SmfChangeIndication = "CHANGED"
 	SmfChangeIndicationRemoved SmfChangeIndication = "REMOVED"
 )
+
+type UeContextRelocateData struct {
+	UeContext                *UeContext         `json:"ueContext"`
+	TargetId                 *NgRanTargetId     `json:"targetId"`
+	SourceToTargetData       *N2InfoContent     `json:"sourceToTargetData"`
+	ForwardRelocationRequest *RefToBinaryData   `json:"forwardRelocationRequest"`
+	PduSessionList           []N2SmInformation  `json:"pduSessionList,omitempty"`
+	UeRadioCapability        *N2InfoContent     `json:"ueRadioCapability,omitempty"`
+	NgapCause                *NgApCause         `json:"ngapCause,omitempty"`
+	SupportedFeatures        string             `json:"supportedFeatures,omitempty"`
+}
+
+type UeContextRelocatedData struct {
+	UeContext *UeContext `json:"ueContext"`
+}
+
+type NgRanTargetId struct {
+	RanNodeId *GlobalRanNodeId `json:"ranNodeId"`
+	Tai       *Tai             `json:"tai"`
+}
+
+type UeContextCancelRelocateData struct {
+	Supi                     string           `json:"supi,omitempty"`
+	RelocationCancelRequest  *RefToBinaryData `json:"relocationCancelRequest"`
+}

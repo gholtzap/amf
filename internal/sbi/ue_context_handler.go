@@ -477,3 +477,140 @@ func (s *Server) RegistrationStatusUpdate(ueContextId string, reqData *UeRegStat
 		Detail: fmt.Sprintf("Invalid transfer status: %s", reqData.TransferStatus),
 	}
 }
+
+func (s *Server) RelocateUEContext(ueContextId string, relocateData *UeContextRelocateData, binaryParts map[string][]byte) (*UeContextRelocatedData, *ProblemDetails) {
+	logger.SbiLog.Infof("Relocating UE Context for UE ID: %s", ueContextId)
+
+	if relocateData.UeContext == nil {
+		logger.SbiLog.Error("UE Context is required in relocate request")
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "UE Context is required",
+		}
+	}
+
+	if relocateData.TargetId == nil {
+		logger.SbiLog.Error("Target ID is required in relocate request")
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Target ID is required",
+		}
+	}
+
+	if relocateData.SourceToTargetData == nil {
+		logger.SbiLog.Error("Source to target data is required in relocate request")
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Source to target data is required",
+		}
+	}
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s, creating new context", ueContextId)
+
+		ue = s.amfContext.NewUEContext(0)
+		if ue == nil {
+			logger.SbiLog.Error("Failed to create new UE context")
+			return nil, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Internal Server Error",
+				Status: http.StatusInternalServerError,
+				Detail: "Failed to create UE context",
+			}
+		}
+	}
+
+	if relocateData.UeContext.Supi != "" {
+		ue.Supi = relocateData.UeContext.Supi
+	}
+	if relocateData.UeContext.Pei != "" {
+		ue.Pei = relocateData.UeContext.Pei
+	}
+
+	if relocateData.TargetId.Tai != nil {
+		ue.Tai = ToInternalTai(relocateData.TargetId.Tai)
+		logger.SbiLog.Infof("Updated TAI for UE: MCC=%s, MNC=%s, TAC=%s",
+			ue.Tai.PlmnId.Mcc, ue.Tai.PlmnId.Mnc, ue.Tai.Tac)
+	}
+
+	for _, pduSessionInfo := range relocateData.PduSessionList {
+		if pduSessionInfo.PduSessionId > 0 {
+			if session, exists := ue.PduSessions[pduSessionInfo.PduSessionId]; exists {
+				logger.SbiLog.Infof("Updating PDU Session %d for relocated UE", pduSessionInfo.PduSessionId)
+				if pduSessionInfo.SNssai != nil {
+					session.Snssai = ToInternalSnssai(pduSessionInfo.SNssai)
+				}
+			} else {
+				logger.SbiLog.Infof("Creating new PDU Session %d for relocated UE", pduSessionInfo.PduSessionId)
+				newSession := &context.PduSessionContext{
+					PduSessionId: pduSessionInfo.PduSessionId,
+					Snssai:       ToInternalSnssai(pduSessionInfo.SNssai),
+				}
+				ue.PduSessions[pduSessionInfo.PduSessionId] = newSession
+			}
+		}
+	}
+
+	if relocateData.NgapCause != nil {
+		logger.SbiLog.Infof("Relocation cause: group=%d, value=%d",
+			relocateData.NgapCause.Group, relocateData.NgapCause.Value)
+	}
+
+	response := &UeContextRelocatedData{
+		UeContext: &UeContext{
+			Supi:             ue.Supi,
+			Pei:              ue.Pei,
+			UdmGroupId:       relocateData.UeContext.UdmGroupId,
+			AusfGroupId:      relocateData.UeContext.AusfGroupId,
+			RoutingIndicator: relocateData.UeContext.RoutingIndicator,
+		},
+	}
+
+	logger.SbiLog.Infof("UE Context relocated successfully for UE: %s", ue.Supi)
+	return response, nil
+}
+
+func (s *Server) CancelRelocateUEContext(ueContextId string, cancelData *UeContextCancelRelocateData, binaryParts map[string][]byte) *ProblemDetails {
+	logger.SbiLog.Infof("Cancelling UE Context Relocation for UE ID: %s", ueContextId)
+
+	if cancelData.RelocationCancelRequest == nil {
+		logger.SbiLog.Error("Relocation cancel request is required")
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Relocation cancel request is required",
+		}
+	}
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	if cancelData.Supi != "" && ue.Supi != cancelData.Supi {
+		logger.SbiLog.Warnf("SUPI mismatch: expected %s, got %s", ue.Supi, cancelData.Supi)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "SUPI mismatch",
+		}
+	}
+
+	logger.SbiLog.Infof("Relocation cancelled for UE: %s", ue.Supi)
+	return nil
+}
