@@ -370,3 +370,84 @@ type AmfEventReport struct {
 	TimeStamp string `json:"timeStamp,omitempty"`
 	Supi      string `json:"supi,omitempty"`
 }
+
+type RequestLocInfo struct {
+	Req5gsLoc         bool   `json:"req5gsLoc,omitempty"`
+	ReqCurrentLoc     bool   `json:"reqCurrentLoc,omitempty"`
+	ReqRatType        bool   `json:"reqRatType,omitempty"`
+	ReqTimeZone       bool   `json:"reqTimeZone,omitempty"`
+	SupportedFeatures string `json:"supportedFeatures,omitempty"`
+}
+
+type ProvideLocInfo struct {
+	CurrentLoc         bool          `json:"currentLoc,omitempty"`
+	Location           *UserLocation `json:"location,omitempty"`
+	AdditionalLocation *UserLocation `json:"additionalLocation,omitempty"`
+	GeoInfo            *GeographicArea `json:"geoInfo,omitempty"`
+	LocationAge        int32         `json:"locationAge,omitempty"`
+	RatType            string        `json:"ratType,omitempty"`
+	Timezone           string        `json:"timezone,omitempty"`
+	SupportedFeatures  string        `json:"supportedFeatures,omitempty"`
+	OldGuami           *Guami        `json:"oldGuami,omitempty"`
+}
+
+type GeographicArea struct {
+	Point            *Point            `json:"point,omitempty"`
+	PointUncertainty *PointUncertainty `json:"pointUncertainty,omitempty"`
+	Polygon          []Point           `json:"polygon,omitempty"`
+}
+
+type Point struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
+type PointUncertainty struct {
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Uncertainty float64 `json:"uncertainty"`
+}
+
+type UeContextInfo struct {
+	SupportVoPS         bool   `json:"supportVoPS,omitempty"`
+	SupportVoPSn3gpp    bool   `json:"supportVoPSn3gpp,omitempty"`
+	LastActTime         string `json:"lastActTime,omitempty"`
+	AccessType          string `json:"accessType,omitempty"`
+	RatType             string `json:"ratType,omitempty"`
+	SupportedFeatures   string `json:"supportedFeatures,omitempty"`
+}
+
+type UeContextInfoClass string
+
+const (
+	UeContextInfoClassTADS UeContextInfoClass = "TADS"
+)
+
+type EnableUeReachabilityReqData struct {
+	Reachability      string        `json:"reachability"`
+	SupportedFeatures string        `json:"supportedFeatures,omitempty"`
+	OldGuami          *Guami        `json:"oldGuami,omitempty"`
+	ExtBufSupport     bool          `json:"extBufSupport,omitempty"`
+	QosFlowInfoList   []QosFlowInfo `json:"qosFlowInfoList,omitempty"`
+	PduSessionId      int32         `json:"pduSessionId,omitempty"`
+}
+
+type EnableUeReachabilityRspData struct {
+	Reachability      string `json:"reachability"`
+	SupportedFeatures string `json:"supportedFeatures,omitempty"`
+}
+
+type QosFlowInfo struct {
+	Qfi        int32  `json:"qfi"`
+	Ppi        int32  `json:"ppi,omitempty"`
+	FiveQi     int32  `json:"5qi,omitempty"`
+	DlDataSize int32  `json:"dlDataSize,omitempty"`
+}
+
+type UeReachability string
+
+const (
+	UeReachabilityUNREACHABLE UeReachability = "UNREACHABLE"
+	UeReachabilityREACHABLE   UeReachability = "REACHABLE"
+	UeReachabilityREG_UPDATE  UeReachability = "REGULATORY_ONLY"
+)

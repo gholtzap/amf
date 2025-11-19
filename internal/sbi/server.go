@@ -58,7 +58,7 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("/namf-evts/v1/subscriptions", s.handleEventSubscriptions)
 	s.router.HandleFunc("/namf-evts/v1/subscriptions/", s.handleEventSubscription)
 
-	s.router.HandleFunc("/namf-loc/v1/provide-location-info", s.handleProvideLocationInfo)
+	s.router.HandleFunc("/namf-loc/v1/", s.handleLocationService)
 
 	s.router.HandleFunc("/namf-mt/v1/ue-contexts/", s.handleMTService)
 
@@ -293,14 +293,201 @@ func (s *Server) handleDeleteEventSubscription(w http.ResponseWriter, subscripti
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleProvideLocationInfo(w http.ResponseWriter, r *http.Request) {
-	logger.SbiLog.Infof("Handle Provide Location Info: %s %s", r.Method, r.URL.Path)
+func (s *Server) handleLocationService(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Infof("Handle Location Service: %s %s", r.Method, r.URL.Path)
 
-	w.WriteHeader(http.StatusNotImplemented)
+	path := r.URL.Path
+	prefix := "/namf-loc/v1/"
+	if !strings.HasPrefix(path, prefix) {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Invalid path format",
+		})
+		return
+	}
+
+	pathAfterPrefix := strings.TrimPrefix(path, prefix)
+	if pathAfterPrefix == "" {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "UE Context ID is required",
+		})
+		return
+	}
+
+	parts := strings.Split(pathAfterPrefix, "/")
+	if len(parts) < 2 {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Invalid location service path",
+		})
+		return
+	}
+
+	ueContextId := parts[0]
+	operation := parts[1]
+
+	if operation == "provide-loc-info" && r.Method == http.MethodPost {
+		s.handleProvideLocationInfo(w, r, ueContextId)
+	} else {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Method Not Allowed",
+			Status: http.StatusMethodNotAllowed,
+			Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+		})
+	}
+}
+
+func (s *Server) handleProvideLocationInfo(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Provide location info for UE: %s", ueContextId)
+
+	var requestData RequestLocInfo
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.ProvideLocationInfo(ueContextId, &requestData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleMTService(w http.ResponseWriter, r *http.Request) {
 	logger.SbiLog.Infof("Handle MT Service: %s %s", r.Method, r.URL.Path)
+
+	path := r.URL.Path
+	prefix := "/namf-mt/v1/"
+	if !strings.HasPrefix(path, prefix) {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Invalid path format",
+		})
+		return
+	}
+
+	pathAfterPrefix := strings.TrimPrefix(path, prefix)
+	if pathAfterPrefix == "" {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "Resource path is required",
+		})
+		return
+	}
+
+	parts := strings.Split(pathAfterPrefix, "/")
+
+	if parts[0] == "ue-contexts" && len(parts) > 1 {
+		if len(parts) == 2 && r.Method == http.MethodGet {
+			ueContextId := parts[1]
+			s.handleProvideDomainSelectionInfo(w, r, ueContextId)
+			return
+		}
+
+		if len(parts) == 3 && parts[2] == "ue-reachind" && r.Method == http.MethodPut {
+			ueContextId := parts[1]
+			s.handleEnableUEReachability(w, r, ueContextId)
+			return
+		}
+
+		if parts[1] == "enable-group-reachability" && r.Method == http.MethodPost {
+			s.handleEnableGroupReachability(w, r)
+			return
+		}
+	}
+
+	sendProblemDetails(w, &ProblemDetails{
+		Type:   "about:blank",
+		Title:  "Method Not Allowed",
+		Status: http.StatusMethodNotAllowed,
+		Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+	})
+}
+
+func (s *Server) handleProvideDomainSelectionInfo(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Provide Domain Selection Info for UE: %s", ueContextId)
+
+	infoClass := r.URL.Query().Get("info-class")
+	supportedFeatures := r.URL.Query().Get("supported-features")
+	oldGuamiStr := r.URL.Query().Get("old-guami")
+
+	var oldGuami *Guami
+	if oldGuamiStr != "" {
+		if err := json.Unmarshal([]byte(oldGuamiStr), &oldGuami); err != nil {
+			logger.SbiLog.Errorf("Failed to parse old-guami: %v", err)
+		}
+	}
+
+	response, problemDetails := s.ProvideDomainSelectionInfo(ueContextId, infoClass, supportedFeatures, oldGuami)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleEnableUEReachability(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Enable UE Reachability for UE: %s", ueContextId)
+
+	var reqData EnableUeReachabilityReqData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.EnableUEReachability(ueContextId, &reqData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) handleEnableGroupReachability(w http.ResponseWriter, r *http.Request) {
+	logger.SbiLog.Info("Enable Group Reachability")
 
 	w.WriteHeader(http.StatusNotImplemented)
 }
