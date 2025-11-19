@@ -761,3 +761,27 @@ type UeContextSearchResult struct {
 	UeContexts []SearchedUeContext `json:"ueContexts"`
 	TotalCount int                 `json:"totalCount"`
 }
+
+type UeContextTransferReqData struct {
+	Reason            string               `json:"reason"`
+	AccessType        string               `json:"accessType"`
+	PlmnId            *PlmnId              `json:"plmnId,omitempty"`
+	RegRequest        *N1MessageContainer  `json:"regRequest,omitempty"`
+	SupportedFeatures string               `json:"supportedFeatures,omitempty"`
+}
+
+type UeContextTransferRspData struct {
+	UeContext                   *UeContext     `json:"ueContext"`
+	UeRadioCapability           *N2InfoContent `json:"ueRadioCapability,omitempty"`
+	UeRadioCapabilityForPaging  *N2InfoContent `json:"ueRadioCapabilityForPaging,omitempty"`
+	UeNbiotRadioCapability      *N2InfoContent `json:"ueNbiotRadioCapability,omitempty"`
+	SupportedFeatures           string         `json:"supportedFeatures,omitempty"`
+}
+
+type TransferReason string
+
+const (
+	TransferReasonInitReg            TransferReason = "INIT_REG"
+	TransferReasonMobiReg            TransferReason = "MOBI_REG"
+	TransferReasonMobiRegUeValidated TransferReason = "MOBI_REG_UE_VALIDATED"
+)

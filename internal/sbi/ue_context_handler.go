@@ -376,3 +376,42 @@ func (s *Server) QueryUEContexts(supi string, gpsi string) (*UeContextSearchResu
 	logger.SbiLog.Infof("Found %d UE contexts", result.TotalCount)
 	return result, nil
 }
+
+func (s *Server) UEContextTransfer(ueContextId string, reqData *UeContextTransferReqData, binaryParts map[string][]byte) (*UeContextTransferRspData, *ProblemDetails) {
+	logger.SbiLog.Infof("UE Context Transfer for UE ID: %s, Reason: %s", ueContextId, reqData.Reason)
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	var ueRadioCapability *N2InfoContent
+	if n1Content, exists := binaryParts["ueRadioCapability"]; exists && len(n1Content) > 0 {
+		ueRadioCapability = &N2InfoContent{
+			NgapData: &RefToBinaryData{
+				ContentId: "ueRadioCapability",
+			},
+		}
+	}
+
+	response := &UeContextTransferRspData{
+		UeContext: &UeContext{
+			Supi:             ue.Supi,
+			Pei:              ue.Pei,
+			UdmGroupId:       "",
+			AusfGroupId:      "",
+			RoutingIndicator: "",
+		},
+		UeRadioCapability: ueRadioCapability,
+		SupportedFeatures: reqData.SupportedFeatures,
+	}
+
+	logger.SbiLog.Infof("UE Context Transfer successful for UE: %s", ue.Supi)
+	return response, nil
+}

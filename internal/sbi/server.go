@@ -181,6 +181,20 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) > 1 && parts[1] == "transfer" {
+		if r.Method == http.MethodPost {
+			s.handleUEContextTransfer(w, r, ueContextId)
+		} else {
+			sendProblemDetails(w, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Method Not Allowed",
+				Status: http.StatusMethodNotAllowed,
+				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+			})
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handleCreateUEContext(w, r, ueContextId)
@@ -882,6 +896,35 @@ func (s *Server) handleAssignEbi(w http.ResponseWriter, r *http.Request, ueConte
 	}
 }
 
+func (s *Server) handleUEContextTransfer(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Handle UE Context Transfer for UE: %s", ueContextId)
+
+	transferData, binaryParts, err := parseUEContextTransferRequest(r)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to parse UE context transfer request: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to parse request: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.UEContextTransfer(ueContextId, transferData, binaryParts)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
 func sendProblemDetails(w http.ResponseWriter, problem *ProblemDetails) {
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(problem.Status)
@@ -1106,6 +1149,82 @@ func parseMbsN2TransferRequest(r *http.Request) (*MbsN2MessageTransferReqData, m
 
 			if strings.Contains(partContentType, "application/json") {
 				var jsonData MbsN2MessageTransferReqData
+				if err := json.Unmarshal(data, &jsonData); err != nil {
+					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
+				}
+				reqData = &jsonData
+			} else if contentId != "" {
+				binaryParts[contentId] = data
+			}
+
+			part.Close()
+		}
+
+		if reqData == nil {
+			return nil, nil, fmt.Errorf("JSON data part not found in multipart request")
+		}
+
+		return reqData, binaryParts, nil
+	}
+
+	return nil, nil, fmt.Errorf("unsupported Content-Type: %s", contentType)
+}
+
+func parseUEContextTransferRequest(r *http.Request) (*UeContextTransferReqData, map[string][]byte, error) {
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "application/json") {
+		var reqData UeContextTransferReqData
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+
+		if err := json.Unmarshal(body, &reqData); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
+
+		return &reqData, nil, nil
+	}
+
+	if strings.Contains(contentType, "multipart/related") {
+		mediaType, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse content type: %w", err)
+		}
+
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			return nil, nil, fmt.Errorf("expected multipart content type")
+		}
+
+		boundary := params["boundary"]
+		if boundary == "" {
+			return nil, nil, fmt.Errorf("boundary not found in content type")
+		}
+
+		reader := multipart.NewReader(r.Body, boundary)
+		var reqData *UeContextTransferReqData
+		binaryParts := make(map[string][]byte)
+
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read multipart: %w", err)
+			}
+
+			partContentType := part.Header.Get("Content-Type")
+			contentId := strings.Trim(part.Header.Get("Content-Id"), "<>")
+
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read part data: %w", err)
+			}
+
+			if strings.Contains(partContentType, "application/json") {
+				var jsonData UeContextTransferReqData
 				if err := json.Unmarshal(data, &jsonData); err != nil {
 					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
 				}
