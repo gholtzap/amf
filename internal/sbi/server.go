@@ -154,17 +154,32 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(parts) > 1 && parts[1] == "n1-n2-messages" {
-		if r.Method == http.MethodPost {
-			s.handleN1N2MessageTransfer(w, r, ueContextId)
-		} else {
-			sendProblemDetails(w, &ProblemDetails{
-				Type:   "about:blank",
-				Title:  "Method Not Allowed",
-				Status: http.StatusMethodNotAllowed,
-				Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
-			})
+		if len(parts) == 2 {
+			if r.Method == http.MethodPost {
+				s.handleN1N2MessageTransfer(w, r, ueContextId)
+			} else {
+				sendProblemDetails(w, &ProblemDetails{
+					Type:   "about:blank",
+					Title:  "Method Not Allowed",
+					Status: http.StatusMethodNotAllowed,
+					Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+				})
+			}
+			return
 		}
-		return
+		if len(parts) == 3 && parts[2] == "subscriptions" {
+			if r.Method == http.MethodPost {
+				s.handleN1N2MessageSubscribe(w, r, ueContextId)
+			} else {
+				sendProblemDetails(w, &ProblemDetails{
+					Type:   "about:blank",
+					Title:  "Method Not Allowed",
+					Status: http.StatusMethodNotAllowed,
+					Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+				})
+			}
+			return
+		}
 	}
 
 	if len(parts) > 1 && parts[1] == "assign-ebi" {
@@ -1066,6 +1081,37 @@ func generateTransferId() string {
 		return "transfer-" + fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(bytes)
+}
+
+func (s *Server) handleN1N2MessageSubscribe(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Handle N1N2 Message Subscribe for UE: %s", ueContextId)
+
+	var reqData UeN1N2InfoSubscriptionCreateData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.N1N2MessageSubscribe(ueContextId, &reqData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	location := fmt.Sprintf("/namf-comm/v1/ue-contexts/%s/n1-n2-messages/subscriptions/%s", ueContextId, response.N1n2NotifySubscriptionId)
+	w.Header().Set("Location", location)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func parseN1N2TransferRequest(r *http.Request) (*N1N2MessageTransferReqData, map[string][]byte, error) {

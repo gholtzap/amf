@@ -841,3 +841,18 @@ type UeContextCancelRelocateData struct {
 	Supi                     string           `json:"supi,omitempty"`
 	RelocationCancelRequest  *RefToBinaryData `json:"relocationCancelRequest"`
 }
+
+type UeN1N2InfoSubscriptionCreateData struct {
+	N2InformationClass  string  `json:"n2InformationClass,omitempty"`
+	N2NotifyCallbackUri string  `json:"n2NotifyCallbackUri,omitempty"`
+	N1MessageClass      string  `json:"n1MessageClass,omitempty"`
+	N1NotifyCallbackUri string  `json:"n1NotifyCallbackUri,omitempty"`
+	NfId                string  `json:"nfId,omitempty"`
+	SupportedFeatures   string  `json:"supportedFeatures,omitempty"`
+	OldGuami            *Guami  `json:"oldGuami,omitempty"`
+}
+
+type UeN1N2InfoSubscriptionCreatedData struct {
+	N1n2NotifySubscriptionId string `json:"n1n2NotifySubscriptionId"`
+	SupportedFeatures        string `json:"supportedFeatures,omitempty"`
+}

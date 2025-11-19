@@ -22,6 +22,8 @@ type AMFContext struct {
 
 	EventSubscriptions sync.Map
 
+	N1N2Subscriptions sync.Map
+
 	NfId string
 
 	mu sync.RWMutex
@@ -103,4 +105,32 @@ func (c *AMFContext) GetEventSubscription(subscriptionId string) (interface{}, b
 func (c *AMFContext) DeleteEventSubscription(subscriptionId string) {
 	c.EventSubscriptions.Delete(subscriptionId)
 	logger.CtxLog.Infof("Event subscription deleted: %s", subscriptionId)
+}
+
+func (c *AMFContext) AddN1N2Subscription(subscription *N1N2Subscription) {
+	c.N1N2Subscriptions.Store(subscription.SubscriptionId, subscription)
+	logger.CtxLog.Infof("N1N2 subscription stored: %s", subscription.SubscriptionId)
+}
+
+func (c *AMFContext) GetN1N2Subscription(subscriptionId string) (*N1N2Subscription, bool) {
+	value, ok := c.N1N2Subscriptions.Load(subscriptionId)
+	if !ok {
+		return nil, false
+	}
+	return value.(*N1N2Subscription), true
+}
+
+func (c *AMFContext) DeleteN1N2Subscription(subscriptionId string) {
+	c.N1N2Subscriptions.Delete(subscriptionId)
+	logger.CtxLog.Infof("N1N2 subscription deleted: %s", subscriptionId)
+}
+
+type N1N2Subscription struct {
+	SubscriptionId      string
+	UeContextId         string
+	N1MessageClass      string
+	N1NotifyCallbackUri string
+	N2InformationClass  string
+	N2NotifyCallbackUri string
+	NfId                string
 }
