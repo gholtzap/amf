@@ -468,6 +468,8 @@ func (s *Server) handleLocationService(w http.ResponseWriter, r *http.Request) {
 		s.handleProvideLocationInfo(w, r, ueContextId)
 	} else if operation == "provide-pos-info" && r.Method == http.MethodPost {
 		s.handleProvidePositioningInfo(w, r, ueContextId)
+	} else if operation == "cancel-pos-info" && r.Method == http.MethodPost {
+		s.handleCancelPositioningInfo(w, r, ueContextId)
 	} else {
 		sendProblemDetails(w, &ProblemDetails{
 			Type:   "about:blank",
@@ -534,6 +536,30 @@ func (s *Server) handleProvidePositioningInfo(w http.ResponseWriter, r *http.Req
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		logger.SbiLog.Errorf("Failed to encode response: %v", err)
 	}
+}
+
+func (s *Server) handleCancelPositioningInfo(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Cancel positioning info for UE: %s", ueContextId)
+
+	var requestData CancelPosInfo
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	problemDetails := s.CancelLocation(ueContextId, &requestData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleMTService(w http.ResponseWriter, r *http.Request) {

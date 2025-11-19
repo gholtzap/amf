@@ -919,6 +919,14 @@ type RequestPosInfo struct {
 	ReliableLocReq          bool     `json:"reliableLocReq,omitempty"`
 }
 
+type CancelPosInfo struct {
+	Supi                      string `json:"supi"`
+	HgmlcCallBackURI          string `json:"hgmlcCallBackURI"`
+	LdrReference              string `json:"ldrReference"`
+	ServingLMFIdentification  string `json:"servingLMFIdentification,omitempty"`
+	SupportedFeatures         string `json:"supportedFeatures,omitempty"`
+}
+
 type ProvidePosInfoExt struct {
 	LocationEstimate       *GeographicArea `json:"locationEstimate,omitempty"`
 	AccuracyFulfilmentInd  string          `json:"accuracyFulfilmentInd,omitempty"`

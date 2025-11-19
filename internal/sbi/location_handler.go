@@ -166,3 +166,71 @@ func (s *Server) ProvidePositioningInfo(ueContextId string, requestData *Request
 	logger.SbiLog.Infof("Positioning info provided for UE: %s", ueContextId)
 	return response, nil
 }
+
+func (s *Server) CancelLocation(ueContextId string, requestData *CancelPosInfo) *ProblemDetails {
+	logger.SbiLog.Infof("Canceling location for UE ID: %s", ueContextId)
+
+	if err := validateUeContextId(ueContextId); err != nil {
+		logger.SbiLog.Errorf("Invalid UE Context ID format: %v", err)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Invalid UE Context ID format: %v", err),
+		}
+	}
+
+	if requestData.Supi == "" {
+		logger.SbiLog.Error("SUPI is required")
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "SUPI is required",
+		}
+	}
+
+	if requestData.HgmlcCallBackURI == "" {
+		logger.SbiLog.Error("H-GMLC Callback URI is required")
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "H-GMLC Callback URI is required",
+		}
+	}
+
+	if requestData.LdrReference == "" {
+		logger.SbiLog.Error("LDR Reference is required")
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "LDR Reference is required",
+		}
+	}
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	if ue.Supi != requestData.Supi {
+		logger.SbiLog.Warnf("SUPI mismatch: UE context has %s, request has %s", ue.Supi, requestData.Supi)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "SUPI mismatch",
+		}
+	}
+
+	logger.SbiLog.Infof("Location request canceled for UE: %s, LDR Reference: %s", ueContextId, requestData.LdrReference)
+	return nil
+}
