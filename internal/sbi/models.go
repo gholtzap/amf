@@ -451,3 +451,49 @@ const (
 	UeReachabilityREACHABLE   UeReachability = "REACHABLE"
 	UeReachabilityREG_UPDATE  UeReachability = "REGULATORY_ONLY"
 )
+
+type EnableGroupReachabilityReqData struct {
+	UeInfoList               []UeInfo                `json:"ueInfoList"`
+	Tmgi                     *Tmgi                   `json:"tmgi"`
+	ReachabilityNotifyUri    string                  `json:"reachabilityNotifyUri,omitempty"`
+	MbsServiceAreaInfoList   []MbsServiceAreaInfo    `json:"mbsServiceAreaInfoList,omitempty"`
+	Arp                      *Arp                    `json:"arp,omitempty"`
+	FiveQi                   int32                   `json:"5qi,omitempty"`
+	SupportedFeatures        string                  `json:"supportedFeatures,omitempty"`
+}
+
+type EnableGroupReachabilityRspData struct {
+	UeConnectedList   []string `json:"ueConnectedList,omitempty"`
+	SupportedFeatures string   `json:"supportedFeatures,omitempty"`
+}
+
+type UeInfo struct {
+	UeList       []string `json:"ueList"`
+	PduSessionId int32    `json:"pduSessionId,omitempty"`
+}
+
+type Tmgi struct {
+	MbsServiceId string  `json:"mbsServiceId"`
+	PlmnId       *PlmnId `json:"plmnId"`
+}
+
+type MbsServiceAreaInfo struct {
+	MbsServiceAreaId string `json:"mbsServiceAreaId"`
+	TaiList          []Tai  `json:"taiList,omitempty"`
+}
+
+type Arp struct {
+	PriorityLevel          int32  `json:"priorityLevel"`
+	PreemptionCapability   string `json:"preemptCap,omitempty"`
+	PreemptionVulnerability string `json:"preemptVuln,omitempty"`
+}
+
+type ReachabilityNotificationData struct {
+	ReachableUeList   []ReachableUeInfo `json:"reachableUeList,omitempty"`
+	UnreachableUeList []string          `json:"unreachableUeList,omitempty"`
+}
+
+type ReachableUeInfo struct {
+	UeList       []string      `json:"ueList"`
+	UserLocation *UserLocation `json:"userLocation,omitempty"`
+}

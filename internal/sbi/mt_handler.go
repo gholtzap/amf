@@ -128,3 +128,70 @@ func (s *Server) EnableUEReachability(ueContextId string, reqData *EnableUeReach
 	logger.SbiLog.Infof("UE reachability enabled for UE: %s, final reachability: %s", ueContextId, response.Reachability)
 	return response, nil
 }
+
+func (s *Server) EnableGroupReachability(reqData *EnableGroupReachabilityReqData) (*EnableGroupReachabilityRspData, *ProblemDetails) {
+	logger.SbiLog.Infof("Enabling group reachability for TMGI: %s-%s-%s",
+		reqData.Tmgi.PlmnId.Mcc, reqData.Tmgi.PlmnId.Mnc, reqData.Tmgi.MbsServiceId)
+
+	if len(reqData.UeInfoList) == 0 {
+		logger.SbiLog.Error("UeInfoList is required and cannot be empty")
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "ueInfoList is required and cannot be empty",
+		}
+	}
+
+	if reqData.Tmgi == nil {
+		logger.SbiLog.Error("TMGI is required")
+		return nil, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: "tmgi is required",
+		}
+	}
+
+	var connectedUeList []string
+
+	for _, ueInfo := range reqData.UeInfoList {
+		if len(ueInfo.UeList) == 0 {
+			continue
+		}
+
+		for _, supi := range ueInfo.UeList {
+			ue := s.findUEContextById(supi)
+			if ue == nil {
+				logger.SbiLog.Warnf("UE not found for SUPI: %s", supi)
+				continue
+			}
+
+			if ue.CmState == context.CmIdle {
+				logger.SbiLog.Infof("Paging UE %s to make it reachable for MBS session", supi)
+				ue.CmState = context.CmConnected
+			}
+
+			if ue.CmState == context.CmConnected {
+				connectedUeList = append(connectedUeList, supi)
+				logger.SbiLog.Infof("UE %s is now connected for MBS session", supi)
+			}
+		}
+	}
+
+	response := &EnableGroupReachabilityRspData{
+		UeConnectedList:   connectedUeList,
+		SupportedFeatures: reqData.SupportedFeatures,
+	}
+
+	if reqData.ReachabilityNotifyUri != "" {
+		logger.SbiLog.Infof("Reachability notification URI provided: %s", reqData.ReachabilityNotifyUri)
+	}
+
+	if reqData.FiveQi != 0 {
+		logger.SbiLog.Infof("5QI specified for group reachability: %d", reqData.FiveQi)
+	}
+
+	logger.SbiLog.Infof("Group reachability enabled, %d UEs connected out of total requested", len(connectedUeList))
+	return response, nil
+}

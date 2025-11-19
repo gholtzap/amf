@@ -489,7 +489,30 @@ func (s *Server) handleEnableUEReachability(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleEnableGroupReachability(w http.ResponseWriter, r *http.Request) {
 	logger.SbiLog.Info("Enable Group Reachability")
 
-	w.WriteHeader(http.StatusNotImplemented)
+	var reqData EnableGroupReachabilityReqData
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.EnableGroupReachability(&reqData)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
