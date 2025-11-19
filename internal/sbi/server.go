@@ -180,6 +180,20 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		if len(parts) == 4 && parts[2] == "subscriptions" {
+			subscriptionId := parts[3]
+			if r.Method == http.MethodDelete {
+				s.handleN1N2MessageUnSubscribe(w, ueContextId, subscriptionId)
+			} else {
+				sendProblemDetails(w, &ProblemDetails{
+					Type:   "about:blank",
+					Title:  "Method Not Allowed",
+					Status: http.StatusMethodNotAllowed,
+					Detail: fmt.Sprintf("Method %s not allowed on this resource", r.Method),
+				})
+			}
+			return
+		}
 	}
 
 	if len(parts) > 1 && parts[1] == "assign-ebi" {
@@ -1112,6 +1126,18 @@ func (s *Server) handleN1N2MessageSubscribe(w http.ResponseWriter, r *http.Reque
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		logger.SbiLog.Errorf("Failed to encode response: %v", err)
 	}
+}
+
+func (s *Server) handleN1N2MessageUnSubscribe(w http.ResponseWriter, ueContextId string, subscriptionId string) {
+	logger.SbiLog.Infof("Handle N1N2 Message UnSubscribe for UE: %s, Subscription: %s", ueContextId, subscriptionId)
+
+	problemDetails := s.N1N2MessageUnSubscribe(ueContextId, subscriptionId)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func parseN1N2TransferRequest(r *http.Request) (*N1N2MessageTransferReqData, map[string][]byte, error) {

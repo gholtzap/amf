@@ -142,3 +142,45 @@ func (s *Server) N1N2MessageSubscribe(ueContextId string, reqData *UeN1N2InfoSub
 		SupportedFeatures:        reqData.SupportedFeatures,
 	}, nil
 }
+
+func (s *Server) N1N2MessageUnSubscribe(ueContextId string, subscriptionId string) *ProblemDetails {
+	logger.SbiLog.Infof("Deleting N1N2 Message Subscription: %s for UE: %s", subscriptionId, ueContextId)
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		logger.SbiLog.Warnf("UE Context not found for ID: %s", ueContextId)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		}
+	}
+
+	subscription, exists := s.amfContext.GetN1N2Subscription(subscriptionId)
+	if !exists {
+		logger.SbiLog.Warnf("N1N2 Subscription not found: %s", subscriptionId)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("Subscription not found: %s", subscriptionId),
+		}
+	}
+
+	if subscription.UeContextId != ueContextId {
+		logger.SbiLog.Warnf("Subscription %s does not belong to UE: %s", subscriptionId, ueContextId)
+		return &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("Subscription not found for this UE context"),
+		}
+	}
+
+	s.amfContext.DeleteN1N2Subscription(subscriptionId)
+
+	logger.SbiLog.Infof("N1N2 Subscription deleted successfully: %s", subscriptionId)
+
+	return nil
+}
