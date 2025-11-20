@@ -339,3 +339,56 @@ func (h *Handler) SendDownlinkNASTransport(ranUeNgapId, amfUeNgapId int64, nasPD
 
 	return h.server.SendMessage(ue.RanContext.Conn, pdu)
 }
+
+func (h *Handler) SendPDUSessionResourceSetupRequest(ranUeNgapId, amfUeNgapId int64, pduSessionId uint8, nasPDU []byte, n2SmInfo []byte) error {
+	logger.NgapLog.Infof("Sending PDU Session Resource Setup Request for PDU Session ID: %d", pduSessionId)
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	if ue.RanContext == nil {
+		return fmt.Errorf("RAN context not available for UE")
+	}
+
+	pduSessionItem := &PDUSessionResourceSetupItem{
+		PDUSessionID: int64(pduSessionId),
+		NASPDU:       nasPDU,
+		SNSSAI: &SNSSAI{
+			SST: 1,
+		},
+	}
+
+	if len(n2SmInfo) > 0 {
+		pduSessionItem.TransferData = n2SmInfo
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodePDUSessionResourceSetup,
+		Criticality:   CriticalityReject,
+		IEs: []ProtocolIE{
+			{
+				Id:          ProtocolIEIDAMFUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       amfUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDRANUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ranUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDPDUSessionResourceSetupListSUReq,
+				Criticality: CriticalityReject,
+				Value:       pduSessionItem,
+			},
+		},
+	}
+
+	logger.NgapLog.Infof("PDU Session Resource Setup Request: RAN UE NGAP ID=%d, AMF UE NGAP ID=%d, PDU Session ID=%d",
+		ranUeNgapId, amfUeNgapId, pduSessionId)
+
+	return h.server.SendMessage(ue.RanContext.Conn, pdu)
+}

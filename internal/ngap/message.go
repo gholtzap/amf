@@ -58,6 +58,7 @@ const (
 	ProtocolIEIDDefaultPagingDRX              = 21
 	ProtocolIEIDRANNodeName                   = 82
 	ProtocolIEIDPDUSessionResourceSetupListCxtReq = 74
+	ProtocolIEIDPDUSessionResourceSetupListSUReq  = 74
 	ProtocolIEIDAllowedNSSAI                  = 0
 	ProtocolIEIDUESecurityCapabilities        = 119
 	ProtocolIEIDSecurityKey                   = 94
@@ -104,6 +105,13 @@ type PDUSessionResourceSetupItemCxtReq struct {
 	PDUSessionID            int
 	SNSSAI                  SNSSAI
 	PDUSessionResourceSetupRequestTransfer []byte
+}
+
+type PDUSessionResourceSetupItem struct {
+	PDUSessionID int64
+	NASPDU       []byte
+	SNSSAI       *SNSSAI
+	TransferData []byte
 }
 
 type SNSSAI struct {

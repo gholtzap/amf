@@ -1,0 +1,366 @@
+package nas
+
+import (
+	"encoding/binary"
+	"fmt"
+)
+
+type ULNASTransportMsg struct {
+	PayloadContainerType uint8
+	PayloadContainer     []byte
+	PDUSessionID         uint8
+	OldPDUSessionID      uint8
+	RequestType          uint8
+	SNSSAI               []byte
+	DNN                  []byte
+	AdditionalInfo       []byte
+}
+
+type DLNASTransportMsg struct {
+	PayloadContainerType uint8
+	PayloadContainer     []byte
+	PDUSessionID         uint8
+	AdditionalInfo       []byte
+	Cause5GMM            uint8
+	BackoffTimer         []byte
+}
+
+type PDUSessionEstablishmentRequestMsg struct {
+	IntegrityProtectionMaximumDataRate uint8
+	PDUSessionType                      uint8
+	SSCMode                             uint8
+	Capability5GSM                      []byte
+	MaximumNumberOfSupportedPacketFilters uint8
+	AlwaysOnPDUSessionRequested         uint8
+	SMPDUDNRequestContainer             []byte
+	ExtendedProtocolConfigurationOptions []byte
+}
+
+type PDUSessionEstablishmentAcceptMsg struct {
+	PDUSessionType                      uint8
+	SSCMode                             uint8
+	QoSRules                            []byte
+	SessionAMBR                         []byte
+	Cause5GSM                           uint8
+	PDUAddress                          []byte
+	SNSSAl                              []byte
+	AlwaysOnPDUSessionIndication        uint8
+	MappedEPSBearerContexts             []byte
+	EAPMessage                          []byte
+	QoSFlowDescriptions                 []byte
+	ExtendedProtocolConfigurationOptions []byte
+	DNN                                 []byte
+}
+
+type PDUSessionEstablishmentRejectMsg struct {
+	Cause5GSM                            uint8
+	BackoffTimer                         []byte
+	AllowedSSCMode                       uint8
+	EAPMessage                           []byte
+	ExtendedProtocolConfigurationOptions []byte
+}
+
+func DecodeULNASTransport(payload []byte) (*ULNASTransportMsg, error) {
+	if len(payload) < 2 {
+		return nil, fmt.Errorf("UL NAS transport too short")
+	}
+
+	msg := &ULNASTransportMsg{}
+	offset := 0
+
+	msg.PayloadContainerType = payload[offset] & 0x0f
+	offset++
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case IEIPayloadContainer:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid payload container length")
+			}
+			msg.PayloadContainer = payload[offset : offset+length]
+			offset += length
+
+		case IEIPDUSessionID:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.PDUSessionID = payload[offset]
+			offset++
+
+		case 0x59:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.OldPDUSessionID = payload[offset]
+			offset++
+
+		case 0x8:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.RequestType = payload[offset] & 0x07
+			offset++
+
+		case IEISSNSSAl:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid S-NSSAI length")
+			}
+			msg.SNSSAI = payload[offset : offset+length]
+			offset += length
+
+		case IEIDNN:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid DNN length")
+			}
+			msg.DNN = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodeDLNASTransport(msg *DLNASTransportMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.PayloadContainerType&0x0f)
+
+	if len(msg.PayloadContainer) > 0 {
+		payload = append(payload, IEIPayloadContainer)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.PayloadContainer)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.PayloadContainer...)
+	}
+
+	if msg.PDUSessionID > 0 {
+		payload = append(payload, IEIPDUSessionID)
+		payload = append(payload, msg.PDUSessionID)
+	}
+
+	if msg.Cause5GMM > 0 {
+		payload = append(payload, 0x58)
+		payload = append(payload, msg.Cause5GMM)
+	}
+
+	if len(msg.BackoffTimer) > 0 {
+		payload = append(payload, 0x37)
+		payload = append(payload, uint8(len(msg.BackoffTimer)))
+		payload = append(payload, msg.BackoffTimer...)
+	}
+
+	return payload
+}
+
+func DecodePDUSessionEstablishmentRequest(payload []byte) (*PDUSessionEstablishmentRequestMsg, error) {
+	msg := &PDUSessionEstablishmentRequestMsg{}
+	offset := 0
+
+	if offset >= len(payload) {
+		return msg, nil
+	}
+
+	msg.IntegrityProtectionMaximumDataRate = payload[offset]
+	offset++
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x09:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.PDUSessionType = payload[offset] & 0x07
+			offset++
+
+		case 0x0a:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.SSCMode = payload[offset] & 0x07
+			offset++
+
+		case 0x28:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid 5GSM capability length")
+			}
+			msg.Capability5GSM = payload[offset : offset+length]
+			offset += length
+
+		case 0x55:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			offset += length
+
+		case 0x7b:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid extended protocol configuration options length")
+			}
+			msg.ExtendedProtocolConfigurationOptions = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodePDUSessionEstablishmentAccept(msg *PDUSessionEstablishmentAcceptMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, (msg.PDUSessionType&0x07)|(msg.SSCMode<<4))
+
+	if len(msg.QoSRules) > 0 {
+		payload = append(payload, 0x79)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.QoSRules)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.QoSRules...)
+	}
+
+	if len(msg.SessionAMBR) > 0 {
+		payload = append(payload, 0x2a)
+		payload = append(payload, uint8(len(msg.SessionAMBR)))
+		payload = append(payload, msg.SessionAMBR...)
+	}
+
+	if len(msg.PDUAddress) > 0 {
+		payload = append(payload, 0x29)
+		payload = append(payload, uint8(len(msg.PDUAddress)))
+		payload = append(payload, msg.PDUAddress...)
+	}
+
+	if len(msg.SNSSAl) > 0 {
+		payload = append(payload, IEISSNSSAl)
+		payload = append(payload, uint8(len(msg.SNSSAl)))
+		payload = append(payload, msg.SNSSAl...)
+	}
+
+	if len(msg.QoSFlowDescriptions) > 0 {
+		payload = append(payload, 0x79)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.QoSFlowDescriptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.QoSFlowDescriptions...)
+	}
+
+	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
+		payload = append(payload, 0x7b)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ExtendedProtocolConfigurationOptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
+	}
+
+	if len(msg.DNN) > 0 {
+		payload = append(payload, IEIDNN)
+		payload = append(payload, uint8(len(msg.DNN)))
+		payload = append(payload, msg.DNN...)
+	}
+
+	return payload
+}
+
+func EncodePDUSessionEstablishmentReject(msg *PDUSessionEstablishmentRejectMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.Cause5GSM)
+
+	if len(msg.BackoffTimer) > 0 {
+		payload = append(payload, 0x37)
+		payload = append(payload, uint8(len(msg.BackoffTimer)))
+		payload = append(payload, msg.BackoffTimer...)
+	}
+
+	if msg.AllowedSSCMode > 0 {
+		payload = append(payload, 0x0f)
+		payload = append(payload, msg.AllowedSSCMode&0x07)
+	}
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, 0x78)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
+	}
+
+	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
+		payload = append(payload, 0x7b)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ExtendedProtocolConfigurationOptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
+	}
+
+	return payload
+}

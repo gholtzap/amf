@@ -16,6 +16,7 @@ type Handler struct {
 
 type NGAPHandler interface {
 	SendDownlinkNASTransport(ranUeNgapId, amfUeNgapId int64, nasPDU []byte) error
+	SendPDUSessionResourceSetupRequest(ranUeNgapId, amfUeNgapId int64, pduSessionId uint8, nasPDU []byte, n2SmInfo []byte) error
 }
 
 func NewHandler(ctx *context.AMFContext) *Handler {
@@ -59,6 +60,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 	case MsgTypeRegistrationComplete:
 		logger.NasLog.Infof("Registration Complete received for UE: %s", ue.Supi)
 		return nil
+	case MsgTypeULNASTransport:
+		return h.HandleULNASTransport(ue, pdu.Payload)
 	default:
 		logger.NasLog.Warnf("Unsupported NAS message type: 0x%02x", pdu.MessageType)
 		return nil
@@ -323,5 +326,196 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 	}
 
 	nasData := EncodeNASPDU(pdu)
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle UL NAS Transport for UE SUPI: %s", ue.Supi)
+
+	ulMsg, err := DecodeULNASTransport(payload)
+	if err != nil {
+		return fmt.Errorf("failed to decode UL NAS transport: %v", err)
+	}
+
+	logger.NasLog.Infof("Payload Container Type: 0x%02x, PDU Session ID: %d",
+		ulMsg.PayloadContainerType, ulMsg.PDUSessionID)
+
+	if ulMsg.PayloadContainerType != PayloadContainerTypeN1SMInfo {
+		logger.NasLog.Warnf("Unsupported payload container type: 0x%02x", ulMsg.PayloadContainerType)
+		return nil
+	}
+
+	if len(ulMsg.PayloadContainer) < 3 {
+		return fmt.Errorf("payload container too short")
+	}
+
+	smPdu := ulMsg.PayloadContainer
+	smPD := (smPdu[0] >> 4) & 0x0f
+	smMsgType := smPdu[2]
+
+	logger.NasLog.Infof("SM Protocol Discriminator: 0x%x, SM Message Type: 0x%02x", smPD, smMsgType)
+
+	if smPD != ProtocolDiscriminator5GSM {
+		logger.NasLog.Warnf("Invalid SM protocol discriminator: 0x%x", smPD)
+		return nil
+	}
+
+	switch smMsgType {
+	case MsgTypePDUSessionEstablishmentRequest:
+		return h.HandlePDUSessionEstablishmentRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer, ulMsg.DNN, ulMsg.SNSSAI)
+	case MsgTypePDUSessionReleaseRequest:
+		logger.NasLog.Infof("PDU Session Release Request received for PDU Session ID: %d", ulMsg.PDUSessionID)
+		return nil
+	default:
+		logger.NasLog.Warnf("Unsupported SM message type: 0x%02x", smMsgType)
+		return nil
+	}
+}
+
+func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pduSessionID uint8, smMsg []byte, dnn []byte, snssai []byte) error {
+	logger.NasLog.Infof("Handle PDU Session Establishment Request for UE SUPI: %s, PDU Session ID: %d", ue.Supi, pduSessionID)
+
+	if len(smMsg) < 3 {
+		return fmt.Errorf("SM message too short")
+	}
+
+	smPayload := smMsg[3:]
+	smReq, err := DecodePDUSessionEstablishmentRequest(smPayload)
+	if err != nil {
+		return fmt.Errorf("failed to decode PDU session establishment request: %v", err)
+	}
+
+	logger.NasLog.Infof("PDU Session Type: %d, SSC Mode: %d", smReq.PDUSessionType, smReq.SSCMode)
+
+	dnnStr := "internet"
+	if len(dnn) > 0 {
+		dnnStr = string(dnn)
+	}
+
+	smfClient := consumer.NewSMFClient(h.amfContext.SmfUri)
+
+	createData := &consumer.SmContextCreateData{
+		Supi:         ue.Supi,
+		Dnn:          dnnStr,
+		PduSessionId: int32(pduSessionID),
+		ServingNfId:  h.amfContext.Name,
+		RequestType:  "INITIAL_REQUEST",
+		AnType:       "3GPP_ACCESS",
+		RatType:      "NR",
+	}
+
+	if len(snssai) > 0 && len(snssai) >= 4 {
+		createData.SNssai = &consumer.SNssai{
+			Sst: int(snssai[1]),
+		}
+		if len(snssai) > 4 {
+			sd := fmt.Sprintf("%02x%02x%02x", snssai[2], snssai[3], snssai[4])
+			createData.SNssai.Sd = sd
+		}
+	}
+
+	createResp, err := smfClient.CreateSMContext(createData)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to create SM context: %v", err)
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x1a)
+	}
+
+	if createResp.N1SmMsg != nil {
+		logger.NasLog.Infof("Received N1 SM message from SMF")
+	}
+
+	pduSessionCtx := &context.PduSessionContext{
+		PduSessionId:  int32(pduSessionID),
+		SmContextRef:  createResp.SmContextRef,
+		SmContextId:   createResp.SmContextId,
+		Dnn:           dnnStr,
+		SessionAmbr:   &context.Ambr{Uplink: "100 Mbps", Downlink: "100 Mbps"},
+		State:         context.PduSessionActive,
+	}
+
+	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
+	logger.NasLog.Infof("PDU Session %d created for UE %s", pduSessionID, ue.Supi)
+
+	acceptMsg := &PDUSessionEstablishmentAcceptMsg{
+		PDUSessionType: 1,
+		SSCMode:        1,
+		SessionAMBR:    []byte{0x3e, 0x80, 0x3e, 0x80},
+		QoSRules:       []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
+		PDUAddress:     []byte{0x01, 192, 168, 100, 10},
+	}
+
+	if len(dnn) > 0 {
+		acceptMsg.DNN = dnn
+	}
+	if len(snssai) > 0 {
+		acceptMsg.SNSSAl = snssai
+	}
+
+	smAcceptPayload := EncodePDUSessionEstablishmentAccept(acceptMsg)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionEstablishmentAccept)
+	smPDU = append(smPDU, smAcceptPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	n2SmInfo := []byte{}
+	if createResp.N2SmInfo != nil {
+		logger.NasLog.Infof("N2 SM Info available from SMF")
+	}
+
+	if h.ngapHandler != nil {
+		return h.ngapHandler.SendPDUSessionResourceSetupRequest(
+			ue.RanUeNgapId, ue.AmfUeNgapId, pduSessionID, nasData, n2SmInfo)
+	}
+
+	return nil
+}
+
+func (h *Handler) SendPDUSessionEstablishmentReject(ue *context.UEContext, pduSessionID uint8, cause uint8) error {
+	logger.NasLog.Infof("Sending PDU Session Establishment Reject to UE for PDU Session ID: %d", pduSessionID)
+
+	rejectMsg := &PDUSessionEstablishmentRejectMsg{
+		Cause5GSM: cause,
+	}
+
+	smRejectPayload := EncodePDUSessionEstablishmentReject(rejectMsg)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionEstablishmentReject)
+	smPDU = append(smPDU, smRejectPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }

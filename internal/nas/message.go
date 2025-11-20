@@ -37,6 +37,8 @@ const (
 	MsgTypeSecurityModeCommand        = 0x5d
 	MsgTypeSecurityModeComplete       = 0x5e
 	MsgTypeSecurityModeReject         = 0x5f
+	MsgTypeULNASTransport             = 0x67
+	MsgTypeDLNASTransport             = 0x68
 )
 
 const (
@@ -59,6 +61,11 @@ const (
 	IEINASSecurityAlgorithms  = 0x57
 	IEIReplayed5GSTMSIValue   = 0x77
 	IEIIMEISVRequest          = 0xe0
+	IEIPayloadContainerType   = 0x08
+	IEIPayloadContainer       = 0x7b
+	IEIPDUSessionID           = 0x12
+	IEIDNN                    = 0x25
+	IEISSNSSAl                = 0x22
 )
 
 const (
@@ -71,6 +78,25 @@ const (
 const (
 	ProtocolDiscriminator5GMM = 0x7e
 	ProtocolDiscriminator5GSM = 0x2e
+)
+
+const (
+	PayloadContainerTypeN1SMInfo         = 0x01
+	PayloadContainerTypeSMS              = 0x02
+	PayloadContainerTypeLPP              = 0x03
+	PayloadContainerTypeSOR              = 0x04
+	PayloadContainerTypeUEPolicy         = 0x05
+	PayloadContainerTypeUEParameterUpdate = 0x06
+)
+
+const (
+	MsgTypePDUSessionEstablishmentRequest = 0xc1
+	MsgTypePDUSessionEstablishmentAccept  = 0xc2
+	MsgTypePDUSessionEstablishmentReject  = 0xc3
+	MsgTypePDUSessionModificationRequest  = 0xc9
+	MsgTypePDUSessionModificationCommand  = 0xca
+	MsgTypePDUSessionReleaseRequest       = 0xd1
+	MsgTypePDUSessionReleaseCommand       = 0xd2
 )
 
 const (
