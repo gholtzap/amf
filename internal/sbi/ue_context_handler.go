@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -217,8 +219,59 @@ func parseMultipartRequest(r *http.Request) (*UeContextCreateData, []byte, error
 	}
 
 	if strings.Contains(contentType, "multipart/related") {
+		mediaType, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse content type: %w", err)
+		}
 
-		return nil, nil, fmt.Errorf("multipart/related not yet implemented")
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			return nil, nil, fmt.Errorf("expected multipart content type")
+		}
+
+		boundary := params["boundary"]
+		if boundary == "" {
+			return nil, nil, fmt.Errorf("boundary not found in content type")
+		}
+
+		reader := multipart.NewReader(r.Body, boundary)
+		var createData *UeContextCreateData
+		var n2Info []byte
+
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read multipart: %w", err)
+			}
+
+			partContentType := part.Header.Get("Content-Type")
+			contentId := strings.Trim(part.Header.Get("Content-Id"), "<>")
+
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to read part data: %w", err)
+			}
+
+			if strings.Contains(partContentType, "application/json") {
+				var jsonData UeContextCreateData
+				if err := json.Unmarshal(data, &jsonData); err != nil {
+					return nil, nil, fmt.Errorf("failed to unmarshal JSON part: %w", err)
+				}
+				createData = &jsonData
+			} else if contentId != "" && strings.Contains(partContentType, "application/vnd.3gpp.ngap") {
+				n2Info = data
+			}
+
+			part.Close()
+		}
+
+		if createData == nil {
+			return nil, nil, fmt.Errorf("JSON data part not found in multipart request")
+		}
+
+		return createData, n2Info, nil
 	}
 
 	return nil, nil, fmt.Errorf("unsupported Content-Type: %s", contentType)
