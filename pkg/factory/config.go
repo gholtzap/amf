@@ -38,6 +38,9 @@ type Configuration struct {
 	T3550                           *TimerValue   `json:"t3550"`
 	T3560                           *TimerValue   `json:"t3560"`
 	T3565                           *TimerValue   `json:"t3565"`
+	NrfUri                          string        `json:"nrfUri"`
+	UdmUri                          string        `json:"udmUri"`
+	AusfUri                         string        `json:"ausfUri"`
 }
 
 type Sbi struct {
