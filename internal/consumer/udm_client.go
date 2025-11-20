@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -74,6 +75,15 @@ type DnnInfo struct {
 	DefaultDnnIndicator bool   `json:"defaultDnnIndicator,omitempty"`
 }
 
+type Amf3GppAccessRegistration struct {
+	AmfInstanceId      string   `json:"amfInstanceId"`
+	Guami              string   `json:"guami"`
+	RatType            string   `json:"ratType"`
+	DeregCallbackUri   string   `json:"deregCallbackUri,omitempty"`
+	PcscfRestorationCallbackUri string `json:"pcscfRestorationCallbackUri,omitempty"`
+	InitialRegistrationInd bool `json:"initialRegistrationInd,omitempty"`
+}
+
 func (c *UDMClient) GetAccessAndMobilitySubscriptionData(supi, plmnId string) (*AccessAndMobilitySubscriptionData, error) {
 	logger.ConsumerLog.Infof("Get AM Subscription Data for SUPI: %s", supi)
 
@@ -133,6 +143,36 @@ func (c *UDMClient) GetSmfSelectionSubscriptionData(supi, plmnId string) (*SmfSe
 func (c *UDMClient) RegisterAMF(supi, amfInstanceId, guami string) error {
 	logger.ConsumerLog.Infof("Register AMF for SUPI: %s", supi)
 
-	logger.ConsumerLog.Info("AMF registration not yet implemented")
+	url := fmt.Sprintf("%s/nudm-uecm/v1/%s/registrations/amf-3gpp-access", c.udmUri, supi)
+
+	registration := Amf3GppAccessRegistration{
+		AmfInstanceId:          amfInstanceId,
+		Guami:                  guami,
+		RatType:                "NR",
+		InitialRegistrationInd: true,
+	}
+
+	body, err := json.Marshal(registration)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("AMF registration failed with status: %d", resp.StatusCode)
+	}
+
+	logger.ConsumerLog.Info("AMF registration successful")
 	return nil
 }
