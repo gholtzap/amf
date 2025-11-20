@@ -80,7 +80,24 @@ func main() {
 
 	ngapHandler := ngap.NewHandler(amfContext)
 	logger.MainLog.Info("NGAP handler initialized")
-	_ = ngapHandler
+
+	ngapServer := ngap.NewServer(amfContext, ngapHandler)
+	ngapHandler.SetServer(ngapServer)
+
+	if len(config.Configuration.NgapIpList) > 0 {
+		ngapAddr := config.Configuration.NgapIpList[0]
+		ngapPort := config.Configuration.NgapPort
+		if err := ngapServer.Listen(ngapAddr, ngapPort); err != nil {
+			logger.MainLog.Fatalf("Failed to start NGAP server: %v", err)
+		}
+
+		go func() {
+			if err := ngapServer.Serve(); err != nil {
+				logger.MainLog.Fatalf("NGAP server failed: %v", err)
+			}
+		}()
+		logger.MainLog.Infof("NGAP server started on %s:%d", ngapAddr, ngapPort)
+	}
 
 	sbiServer := sbi.NewServer(amfContext)
 
@@ -119,8 +136,6 @@ func main() {
 			logger.MainLog.Infof("Successfully registered with NRF: %s", nfInstanceId)
 		}
 	}
-
-	logger.MainLog.Info("NGAP server start pending implementation")
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
