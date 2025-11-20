@@ -36,6 +36,7 @@ type AMFContext struct {
 	NrfClient  *consumer.NRFClient
 	UdmClient  *consumer.UDMClient
 	AusfClient *consumer.AUSFClient
+	SmfClient  *consumer.SMFClient
 
 	heartbeatCancel chan struct{}
 
@@ -162,7 +163,7 @@ type N1N2Subscription struct {
 	NfId                string
 }
 
-func (c *AMFContext) InitializeNFClients(nrfUri, udmUri, ausfUri string) {
+func (c *AMFContext) InitializeNFClients(nrfUri, udmUri, ausfUri, smfUri string) {
 	if nrfUri != "" {
 		c.NrfClient = consumer.NewNRFClient(nrfUri)
 		logger.CtxLog.Infof("NRF client initialized with URI: %s", nrfUri)
@@ -176,6 +177,11 @@ func (c *AMFContext) InitializeNFClients(nrfUri, udmUri, ausfUri string) {
 	if ausfUri != "" {
 		c.AusfClient = consumer.NewAUSFClient(ausfUri)
 		logger.CtxLog.Infof("AUSF client initialized with URI: %s", ausfUri)
+	}
+
+	if smfUri != "" {
+		c.SmfClient = consumer.NewSMFClient(smfUri)
+		logger.CtxLog.Infof("SMF client initialized with URI: %s", smfUri)
 	}
 }
 

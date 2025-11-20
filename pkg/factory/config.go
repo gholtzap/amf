@@ -41,6 +41,7 @@ type Configuration struct {
 	NrfUri                          string        `json:"nrfUri"`
 	UdmUri                          string        `json:"udmUri"`
 	AusfUri                         string        `json:"ausfUri"`
+	SmfUri                          string        `json:"smfUri"`
 }
 
 type Sbi struct {

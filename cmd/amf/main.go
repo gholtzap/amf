@@ -44,6 +44,7 @@ func main() {
 		config.Configuration.NrfUri,
 		config.Configuration.UdmUri,
 		config.Configuration.AusfUri,
+		config.Configuration.SmfUri,
 	)
 
 	for _, servedGuami := range config.Configuration.ServedGuamiList {
