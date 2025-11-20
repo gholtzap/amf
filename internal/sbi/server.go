@@ -275,6 +275,8 @@ func (s *Server) handleUEContext(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		s.handleCreateUEContext(w, r, ueContextId)
+	case http.MethodGet:
+		s.handleGetUEContext(w, r, ueContextId)
 	default:
 		sendProblemDetails(w, &ProblemDetails{
 			Type:   "about:blank",

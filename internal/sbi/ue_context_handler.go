@@ -186,6 +186,56 @@ func (s *Server) findUEContextByGuti(guti string) *context.UEContext {
 	return foundUe
 }
 
+func (s *Server) handleGetUEContext(w http.ResponseWriter, r *http.Request, ueContextId string) {
+	logger.SbiLog.Infof("Getting UE Context for ID: %s", ueContextId)
+
+	ue := s.findUEContextById(ueContextId)
+	if ue == nil {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Not Found",
+			Status: http.StatusNotFound,
+			Detail: fmt.Sprintf("UE Context not found for ID: %s", ueContextId),
+		})
+		return
+	}
+
+	response := s.GetUEContext(ueContextId, ue)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
+}
+
+func (s *Server) GetUEContext(ueContextId string, ue *context.UEContext) *UeContextCreatedData {
+	logger.SbiLog.Infof("Retrieving UE Context: %s", ueContextId)
+
+	ueContext := &UeContext{
+		Supi:                ue.Supi,
+		SupiUnauthInd:       false,
+		Pei:                 ue.Pei,
+		IabOperationAllowed: false,
+	}
+
+	pduSessions := []PduSessionContext{}
+	for _, pduSession := range ue.PduSessions {
+		pduSessionCtx := PduSessionContext{
+			PduSessionId: pduSession.PduSessionId,
+			Snssai:       ToSbiSnssai(pduSession.Snssai),
+			Dnn:          pduSession.Dnn,
+		}
+		pduSessions = append(pduSessions, pduSessionCtx)
+	}
+
+	return &UeContextCreatedData{
+		UeContext:      ueContext,
+		PduSessionList: pduSessions,
+	}
+}
+
 func validateUeContextId(ueContextId string) error {
 	if ueContextId == "" {
 		return fmt.Errorf("UE Context ID cannot be empty")
