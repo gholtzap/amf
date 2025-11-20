@@ -76,13 +76,16 @@ func main() {
 
 	nasHandler := nas.NewHandler(amfContext)
 	logger.MainLog.Info("NAS handler initialized")
-	_ = nasHandler
 
 	ngapHandler := ngap.NewHandler(amfContext)
 	logger.MainLog.Info("NGAP handler initialized")
 
 	ngapServer := ngap.NewServer(amfContext, ngapHandler)
 	ngapHandler.SetServer(ngapServer)
+
+	nasHandler.SetNGAPHandler(ngapHandler)
+	ngapHandler.SetNASHandler(nasHandler)
+	logger.MainLog.Info("NAS and NGAP handlers wired together")
 
 	if len(config.Configuration.NgapIpList) > 0 {
 		ngapAddr := config.Configuration.NgapIpList[0]

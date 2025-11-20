@@ -38,6 +38,11 @@ type AMFContext struct {
 	AusfClient *consumer.AUSFClient
 	SmfClient  *consumer.SMFClient
 
+	NrfUri  string
+	UdmUri  string
+	AusfUri string
+	SmfUri  string
+
 	heartbeatCancel chan struct{}
 
 	mu sync.RWMutex
@@ -81,8 +86,10 @@ func GetAMFContext() *AMFContext {
 
 func (c *AMFContext) NewUEContext(ranUeNgapId int64) *UEContext {
 	ue := &UEContext{
-		RanUeNgapId: ranUeNgapId,
-		AmfUeNgapId: c.allocateAmfUeNgapId(),
+		RanUeNgapId:      ranUeNgapId,
+		AmfUeNgapId:      c.allocateAmfUeNgapId(),
+		SecurityContext:  &SecurityContext{},
+		PduSessions:      make(map[int32]*PduSessionContext),
 	}
 	c.UeContexts.Store(ue.AmfUeNgapId, ue)
 	logger.CtxLog.Infof("New UE Context created, AMF UE NGAP ID: %d", ue.AmfUeNgapId)
@@ -164,6 +171,11 @@ type N1N2Subscription struct {
 }
 
 func (c *AMFContext) InitializeNFClients(nrfUri, udmUri, ausfUri, smfUri string) {
+	c.NrfUri = nrfUri
+	c.UdmUri = udmUri
+	c.AusfUri = ausfUri
+	c.SmfUri = smfUri
+
 	if nrfUri != "" {
 		c.NrfClient = consumer.NewNRFClient(nrfUri)
 		logger.CtxLog.Infof("NRF client initialized with URI: %s", nrfUri)

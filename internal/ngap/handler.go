@@ -10,6 +10,11 @@ import (
 type Handler struct {
 	amfContext *context.AMFContext
 	server     *Server
+	nasHandler NASHandler
+}
+
+type NASHandler interface {
+	HandleNASMessage(ue *context.UEContext, nasPDU []byte) error
 }
 
 func NewHandler(ctx *context.AMFContext) *Handler {
@@ -20,6 +25,10 @@ func NewHandler(ctx *context.AMFContext) *Handler {
 
 func (h *Handler) SetServer(server *Server) {
 	h.server = server
+}
+
+func (h *Handler) SetNASHandler(handler NASHandler) {
+	h.nasHandler = handler
 }
 
 func (h *Handler) HandleNGSetupRequest(ranContext *context.RANContext, pdu *NGAPPDU) error {
@@ -162,6 +171,13 @@ func (h *Handler) HandleInitialUEMessage(ranContext *context.RANContext, pdu *NG
 	logger.NgapLog.Infof("Initial UE Message: RAN UE NGAP ID=%d, AMF UE NGAP ID=%d, NAS PDU length=%d",
 		ranUeNgapId, ue.AmfUeNgapId, len(nasPDU))
 
+	if len(nasPDU) > 0 && h.nasHandler != nil {
+		if err := h.nasHandler.HandleNASMessage(ue, nasPDU); err != nil {
+			logger.NgapLog.Errorf("Failed to handle NAS message: %v", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -197,7 +213,12 @@ func (h *Handler) HandleUplinkNASTransport(ranContext *context.RANContext, pdu *
 	logger.NgapLog.Infof("Uplink NAS Transport: RAN UE NGAP ID=%d, AMF UE NGAP ID=%d, NAS PDU length=%d",
 		ranUeNgapId, amfUeNgapId, len(nasPDU))
 
-	_ = ue
+	if len(nasPDU) > 0 && h.nasHandler != nil {
+		if err := h.nasHandler.HandleNASMessage(ue, nasPDU); err != nil {
+			logger.NgapLog.Errorf("Failed to handle NAS message: %v", err)
+			return err
+		}
+	}
 
 	return nil
 }

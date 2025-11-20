@@ -1,0 +1,503 @@
+package nas
+
+import (
+	"encoding/binary"
+	"fmt"
+)
+
+const (
+	SecurityHeaderTypePlainNAS                        = 0x00
+	SecurityHeaderTypeIntegrityProtected              = 0x01
+	SecurityHeaderTypeIntegrityProtectedAndCiphered   = 0x02
+	SecurityHeaderTypeIntegrityProtectedWithNewContext = 0x03
+	SecurityHeaderTypeIntegrityProtectedAndCipheredWithNewContext = 0x04
+)
+
+const (
+	MsgTypeRegistrationRequest        = 0x41
+	MsgTypeRegistrationAccept         = 0x42
+	MsgTypeRegistrationComplete       = 0x43
+	MsgTypeRegistrationReject         = 0x44
+	MsgTypeDeregistrationRequestUEOriginating = 0x45
+	MsgTypeDeregistrationAcceptUEOriginating  = 0x46
+	MsgTypeDeregistrationRequestUETerminating = 0x47
+	MsgTypeDeregistrationAcceptUETerminating  = 0x48
+	MsgTypeServiceRequest             = 0x4c
+	MsgTypeServiceReject              = 0x4d
+	MsgTypeServiceAccept              = 0x4e
+	MsgTypeConfigurationUpdateCommand = 0x54
+	MsgTypeConfigurationUpdateComplete = 0x55
+	MsgTypeAuthenticationRequest      = 0x56
+	MsgTypeAuthenticationResponse     = 0x57
+	MsgTypeAuthenticationReject       = 0x58
+	MsgTypeAuthenticationFailure      = 0x59
+	MsgTypeAuthenticationResult       = 0x5a
+	MsgTypeIdentityRequest            = 0x5b
+	MsgTypeIdentityResponse           = 0x5c
+	MsgTypeSecurityModeCommand        = 0x5d
+	MsgTypeSecurityModeComplete       = 0x5e
+	MsgTypeSecurityModeReject         = 0x5f
+)
+
+const (
+	IEIRegistrationType       = 0x50
+	IEINGKSIAndRegistrationType = 0x50
+	IEIMCCMNC                 = 0x13
+	IEISUPIORSUCI             = 0x77
+	IEIGUTI                   = 0x77
+	IEIUESecurityCapability   = 0x2e
+	IEI5GMMCapability         = 0x10
+	IEIPDUSessionStatus       = 0x50
+	IEIRequestedNSSAI         = 0x2f
+	IEIAllowedNSSAI           = 0x15
+	IEIPLMN                   = 0x13
+	IEIT3512Value             = 0x5e
+	IEIT3502Value             = 0x16
+	IEIEAPMessage             = 0x78
+	IEIABBA                   = 0x38
+	IEINASKeySetIdentifier    = 0x0b
+	IEINASSecurityAlgorithms  = 0x57
+	IEIReplayed5GSTMSIValue   = 0x77
+	IEIIMEISVRequest          = 0xe0
+)
+
+const (
+	RegistrationTypeInitial          = 0x01
+	RegistrationTypeMobilityUpdate   = 0x02
+	RegistrationTypePeriodicUpdate   = 0x03
+	RegistrationTypeEmergency        = 0x04
+)
+
+const (
+	ProtocolDiscriminator5GMM = 0x7e
+	ProtocolDiscriminator5GSM = 0x2e
+)
+
+const (
+	CauseIllegalUE                    = 0x03
+	CauseIMEINotAccepted              = 0x05
+	CauseIllegalME                    = 0x06
+	Cause5GSServicesNotAllowed        = 0x07
+	CausePLMNNotAllowed               = 0x0b
+	CauseTrackingAreaNotAllowed       = 0x0c
+	CauseRoamingNotAllowed            = 0x0d
+	CauseNoSuitableCellsInTrackingArea = 0x0f
+	CauseMACFailure                   = 0x14
+	CauseSynchFailure                 = 0x15
+	CauseCongestion                   = 0x16
+	CauseUESecurityCapabilitiesMismatch = 0x17
+	CauseSecurityModeRejectedUnspecified = 0x18
+	CauseNonEPSAuthenticationUnacceptable = 0x1a
+	CauseN1ModeNotAllowed             = 0x1b
+	CausePayloadWasNotForwarded       = 0x3a
+	CauseDNNNotSupportedInSlice       = 0x3b
+	CauseInsufficientResourcesForSlice = 0x3c
+	CauseSemanticallyIncorrectMessage = 0x5f
+	CauseInvalidMandatoryInformation  = 0x60
+	CauseMessageTypeNonExistent       = 0x61
+	CauseMessageTypeNotCompatible     = 0x62
+	CauseIENotImplemented             = 0x63
+	CauseProtocolError                = 0x6f
+)
+
+type NASPDU struct {
+	ProtocolDiscriminator uint8
+	SecurityHeaderType    uint8
+	MessageType           uint8
+	SequenceNumber        uint8
+	Payload               []byte
+	MAC                   []byte
+}
+
+type RegistrationRequestMsg struct {
+	RegistrationType      uint8
+	NgKSI                 uint8
+	MobileIdentity        []byte
+	UESecurityCapability  []byte
+	RequestedNSSAI        []byte
+	LastVisitedTAI        []byte
+	UENetworkCapability   []byte
+	AdditionalGUTI        []byte
+}
+
+type RegistrationAcceptMsg struct {
+	RegistrationResult    uint8
+	MobileIdentity        []byte
+	TAIList               []byte
+	AllowedNSSAI          []byte
+	T3512Value            []byte
+	T3502Value            []byte
+	EmergencyNumberList   []byte
+}
+
+type AuthenticationRequestMsg struct {
+	NgKSI                 uint8
+	ABBA                  []byte
+	RAND                  []byte
+	AUTN                  []byte
+	EAPMessage            []byte
+}
+
+type AuthenticationResponseMsg struct {
+	RES                   []byte
+	EAPMessage            []byte
+}
+
+type SecurityModeCommandMsg struct {
+	SelectedNASSecurityAlgorithms uint8
+	NgKSI                         uint8
+	ReplayedUESecurityCapabilities []byte
+	IMEISVRequest                 uint8
+	SelectedEPSNASSecurityAlgorithms uint8
+	AdditionalSecurityInformation []byte
+}
+
+type SecurityModeCompleteMsg struct {
+	IMEISV                []byte
+	NASMessageContainer   []byte
+}
+
+func DecodeNASPDU(data []byte) (*NASPDU, error) {
+	if len(data) < 2 {
+		return nil, fmt.Errorf("NAS message too short")
+	}
+
+	pdu := &NASPDU{}
+	offset := 0
+
+	extendedProtocolDiscriminator := data[offset] >> 4
+	securityHeaderType := data[offset] & 0x0f
+	offset++
+
+	if securityHeaderType != SecurityHeaderTypePlainNAS {
+		if len(data) < 7 {
+			return nil, fmt.Errorf("secured NAS message too short")
+		}
+		pdu.SecurityHeaderType = securityHeaderType
+		pdu.ProtocolDiscriminator = extendedProtocolDiscriminator
+		pdu.SequenceNumber = data[offset]
+		offset++
+		pdu.MAC = data[offset : offset+4]
+		offset += 4
+	} else {
+		pdu.SecurityHeaderType = securityHeaderType
+		pdu.ProtocolDiscriminator = extendedProtocolDiscriminator
+	}
+
+	if offset >= len(data) {
+		return nil, fmt.Errorf("no message type in NAS PDU")
+	}
+
+	pdu.MessageType = data[offset]
+	offset++
+
+	pdu.Payload = data[offset:]
+	return pdu, nil
+}
+
+func EncodeNASPDU(pdu *NASPDU) []byte {
+	data := make([]byte, 0)
+
+	firstByte := (pdu.ProtocolDiscriminator << 4) | (pdu.SecurityHeaderType & 0x0f)
+	data = append(data, firstByte)
+
+	if pdu.SecurityHeaderType != SecurityHeaderTypePlainNAS {
+		data = append(data, pdu.SequenceNumber)
+		if len(pdu.MAC) == 4 {
+			data = append(data, pdu.MAC...)
+		} else {
+			data = append(data, 0, 0, 0, 0)
+		}
+	}
+
+	data = append(data, pdu.MessageType)
+	data = append(data, pdu.Payload...)
+
+	return data
+}
+
+func DecodeRegistrationRequest(payload []byte) (*RegistrationRequestMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("registration request too short")
+	}
+
+	msg := &RegistrationRequestMsg{}
+	offset := 0
+
+	msg.NgKSI = (payload[offset] >> 4) & 0x0f
+	msg.RegistrationType = payload[offset] & 0x0f
+	offset++
+
+	for offset < len(payload) {
+		if offset+1 >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case IEISUPIORSUCI:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid mobile identity length")
+			}
+			msg.MobileIdentity = payload[offset : offset+length]
+			offset += length
+
+		case IEIUESecurityCapability:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid UE security capability length")
+			}
+			msg.UESecurityCapability = payload[offset : offset+length]
+			offset += length
+
+		case IEIRequestedNSSAI:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested NSSAI length")
+			}
+			msg.RequestedNSSAI = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.RegistrationResult)
+
+	if len(msg.MobileIdentity) > 0 {
+		payload = append(payload, IEIGUTI)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.MobileIdentity)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.MobileIdentity...)
+	}
+
+	if len(msg.AllowedNSSAI) > 0 {
+		payload = append(payload, IEIAllowedNSSAI)
+		payload = append(payload, uint8(len(msg.AllowedNSSAI)))
+		payload = append(payload, msg.AllowedNSSAI...)
+	}
+
+	if len(msg.TAIList) > 0 {
+		payload = append(payload, 0x54)
+		payload = append(payload, uint8(len(msg.TAIList)))
+		payload = append(payload, msg.TAIList...)
+	}
+
+	if len(msg.T3512Value) > 0 {
+		payload = append(payload, IEIT3512Value)
+		payload = append(payload, uint8(len(msg.T3512Value)))
+		payload = append(payload, msg.T3512Value...)
+	}
+
+	if len(msg.T3502Value) > 0 {
+		payload = append(payload, IEIT3502Value)
+		payload = append(payload, uint8(len(msg.T3502Value)))
+		payload = append(payload, msg.T3502Value...)
+	}
+
+	return payload
+}
+
+func EncodeAuthenticationRequest(msg *AuthenticationRequestMsg) []byte {
+	payload := make([]byte, 0)
+
+	ngksiAndSpareHalf := (msg.NgKSI << 4) | 0x0f
+	payload = append(payload, ngksiAndSpareHalf)
+
+	if len(msg.ABBA) > 0 {
+		payload = append(payload, uint8(len(msg.ABBA)))
+		payload = append(payload, msg.ABBA...)
+	} else {
+		payload = append(payload, 0x02, 0x00, 0x00)
+	}
+
+	if len(msg.RAND) == 16 {
+		payload = append(payload, 0x21)
+		payload = append(payload, msg.RAND...)
+	}
+
+	if len(msg.AUTN) > 0 {
+		payload = append(payload, 0x20)
+		payload = append(payload, uint8(len(msg.AUTN)))
+		payload = append(payload, msg.AUTN...)
+	}
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, IEIEAPMessage)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
+	}
+
+	return payload
+}
+
+func DecodeAuthenticationResponse(payload []byte) (*AuthenticationResponseMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("authentication response too short")
+	}
+
+	msg := &AuthenticationResponseMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x2d:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid RES length")
+			}
+			msg.RES = payload[offset : offset+length]
+			offset += length
+
+		case IEIEAPMessage:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid EAP message length")
+			}
+			msg.EAPMessage = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodeSecurityModeCommand(msg *SecurityModeCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.SelectedNASSecurityAlgorithms)
+
+	ngksiAndSpareHalf := (msg.NgKSI << 4) | 0x0f
+	payload = append(payload, ngksiAndSpareHalf)
+
+	if len(msg.ReplayedUESecurityCapabilities) > 0 {
+		payload = append(payload, IEIUESecurityCapability)
+		payload = append(payload, uint8(len(msg.ReplayedUESecurityCapabilities)))
+		payload = append(payload, msg.ReplayedUESecurityCapabilities...)
+	}
+
+	if msg.IMEISVRequest > 0 {
+		imeisv := 0xe0 | (msg.IMEISVRequest & 0x0f)
+		payload = append(payload, uint8(imeisv))
+	}
+
+	return payload
+}
+
+func DecodeSecurityModeComplete(payload []byte) (*SecurityModeCompleteMsg, error) {
+	msg := &SecurityModeCompleteMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x77:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid IMEISV length")
+			}
+			msg.IMEISV = payload[offset : offset+length]
+			offset += length
+
+		case 0x71:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid NAS message container length")
+			}
+			msg.NASMessageContainer = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}

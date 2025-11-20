@@ -19,6 +19,16 @@ type UEContext struct {
 	RanUeNgapId int64  // RAN UE NGAP ID
 	AmfUeNgapId int64  // AMF UE NGAP ID
 
+	// Registration Information
+	RegistrationType      uint8
+	NgKsi                 int
+	AuthenticationCtxId   string
+	UeSecurityCapability  string
+
+	// NAS Security Counters
+	ULCount uint32
+	DLCount uint32
+
 	// Registration State
 	RegistrationState RegistrationState
 
@@ -56,8 +66,11 @@ type UEContext struct {
 type RegistrationState string
 
 const (
-	Deregistered RegistrationState = "DEREGISTERED"
-	Registered   RegistrationState = "REGISTERED"
+	Deregistered       RegistrationState = "DEREGISTERED"
+	Registered         RegistrationState = "REGISTERED"
+	RegStateRegistering RegistrationState = "REGISTERING"
+	RegStateRegistered  RegistrationState = "REGISTERED"
+	RegStateDeregistered RegistrationState = "DEREGISTERED"
 )
 
 // AccessType represents access type (TS 23.501)
@@ -92,13 +105,16 @@ type Tai struct {
 
 // SecurityContext represents UE security context (TS 33.501)
 type SecurityContext struct {
-	Kseaf           []byte // Key from SEAF
-	Kamf            []byte // AMF Key
-	KnasInt         []byte // NAS Integrity Key
-	KnasEnc         []byte // NAS Encryption Key
-	NgKsi           int    // NAS Key Set Identifier
-	IntegrityAlg    int    // NAS Integrity Algorithm
-	CipheringAlg    int    // NAS Ciphering Algorithm
+	Kseaf              []byte // Key from SEAF
+	Kamf               []byte // AMF Key
+	KnasInt            []byte // NAS Integrity Key
+	KnasEnc            []byte // NAS Encryption Key
+	NgKsi              int    // NAS Key Set Identifier
+	IntegrityAlg       int    // NAS Integrity Algorithm
+	CipheringAlg       int    // NAS Ciphering Algorithm
+	IntegrityAlgorithm int    // Alias for IntegrityAlg
+	CipheringAlgorithm int    // Alias for CipheringAlg
+	Activated          bool   // Security context activation status
 	SecurityCapability *UeSecurityCapability
 }
 
