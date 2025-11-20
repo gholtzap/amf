@@ -371,6 +371,23 @@ type AmfEventReport struct {
 	Supi      string `json:"supi,omitempty"`
 }
 
+type AmfUpdateEventSubscriptionItem struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value,omitempty"`
+}
+
+type AmfUpdateEventOptionItem struct {
+	Op    string      `json:"op"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value,omitempty"`
+}
+
+type AmfUpdatedEventSubscription struct {
+	Subscription *AmfEventSubscription `json:"subscription"`
+	ReportList   []AmfEventReport      `json:"reportList,omitempty"`
+}
+
 type RequestLocInfo struct {
 	Req5gsLoc         bool   `json:"req5gsLoc,omitempty"`
 	ReqCurrentLoc     bool   `json:"reqCurrentLoc,omitempty"`

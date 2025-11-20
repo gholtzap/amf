@@ -402,6 +402,8 @@ func (s *Server) handleEventSubscription(w http.ResponseWriter, r *http.Request)
 	switch r.Method {
 	case http.MethodDelete:
 		s.handleDeleteEventSubscription(w, subscriptionId)
+	case http.MethodPatch:
+		s.handleModifyEventSubscription(w, r, subscriptionId)
 	default:
 		sendProblemDetails(w, &ProblemDetails{
 			Type:   "about:blank",
@@ -422,6 +424,46 @@ func (s *Server) handleDeleteEventSubscription(w http.ResponseWriter, subscripti
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleModifyEventSubscription(w http.ResponseWriter, r *http.Request, subscriptionId string) {
+	logger.SbiLog.Infof("Modifying event subscription: %s", subscriptionId)
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/json-patch+json" {
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Unsupported Media Type",
+			Status: http.StatusUnsupportedMediaType,
+			Detail: "Content-Type must be application/json-patch+json",
+		})
+		return
+	}
+
+	var patchItems []AmfUpdateEventSubscriptionItem
+	if err := json.NewDecoder(r.Body).Decode(&patchItems); err != nil {
+		logger.SbiLog.Errorf("Failed to decode request body: %v", err)
+		sendProblemDetails(w, &ProblemDetails{
+			Type:   "about:blank",
+			Title:  "Bad Request",
+			Status: http.StatusBadRequest,
+			Detail: fmt.Sprintf("Failed to decode request body: %v", err),
+		})
+		return
+	}
+
+	response, problemDetails := s.ModifyEventSubscription(subscriptionId, patchItems)
+	if problemDetails != nil {
+		sendProblemDetails(w, problemDetails)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.SbiLog.Errorf("Failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleLocationService(w http.ResponseWriter, r *http.Request) {
