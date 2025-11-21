@@ -60,6 +60,27 @@ type PDUSessionEstablishmentRejectMsg struct {
 	ExtendedProtocolConfigurationOptions []byte
 }
 
+type PDUSessionModificationRequestMsg struct {
+	Capability5GSM                      []byte
+	Cause5GSM                           uint8
+	MaximumNumberOfSupportedPacketFilters uint8
+	AlwaysOnPDUSessionRequested         uint8
+	IntegrityProtectionMaximumDataRate  []byte
+	RequestedQoSRules                   []byte
+	RequestedQoSFlowDescriptions        []byte
+	MappedEPSBearerContexts             []byte
+	ExtendedProtocolConfigurationOptions []byte
+}
+
+type PDUSessionModificationCommandMsg struct {
+	Cause5GSM                            uint8
+	SessionAMBR                          []byte
+	QoSRules                             []byte
+	QoSFlowDescriptions                  []byte
+	MappedEPSBearerContexts              []byte
+	ExtendedProtocolConfigurationOptions []byte
+}
+
 func DecodeULNASTransport(payload []byte) (*ULNASTransportMsg, error) {
 	if len(payload) < 2 {
 		return nil, fmt.Errorf("UL NAS transport too short")
@@ -352,6 +373,179 @@ func EncodePDUSessionEstablishmentReject(msg *PDUSessionEstablishmentRejectMsg) 
 		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
 		payload = append(payload, lengthBytes...)
 		payload = append(payload, msg.EAPMessage...)
+	}
+
+	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
+		payload = append(payload, 0x7b)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ExtendedProtocolConfigurationOptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
+	}
+
+	return payload
+}
+
+func DecodePDUSessionModificationRequest(payload []byte) (*PDUSessionModificationRequestMsg, error) {
+	msg := &PDUSessionModificationRequestMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x59:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.Cause5GSM = payload[offset]
+			offset++
+
+		case 0x28:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid 5GSM capability length")
+			}
+			msg.Capability5GSM = payload[offset : offset+length]
+			offset += length
+
+		case 0x55:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid maximum number of packet filters length")
+			}
+			offset += length
+
+		case 0x13:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid integrity protection max data rate length")
+			}
+			msg.IntegrityProtectionMaximumDataRate = payload[offset : offset+length]
+			offset += length
+
+		case 0x7a:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested QoS rules length")
+			}
+			msg.RequestedQoSRules = payload[offset : offset+length]
+			offset += length
+
+		case 0x79:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested QoS flow descriptions length")
+			}
+			msg.RequestedQoSFlowDescriptions = payload[offset : offset+length]
+			offset += length
+
+		case 0x7f:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid mapped EPS bearer contexts length")
+			}
+			msg.MappedEPSBearerContexts = payload[offset : offset+length]
+			offset += length
+
+		case 0x7b:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid extended protocol configuration options length")
+			}
+			msg.ExtendedProtocolConfigurationOptions = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodePDUSessionModificationCommand(msg *PDUSessionModificationCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	if msg.Cause5GSM > 0 {
+		payload = append(payload, 0x59)
+		payload = append(payload, msg.Cause5GSM)
+	}
+
+	if len(msg.SessionAMBR) > 0 {
+		payload = append(payload, 0x2a)
+		payload = append(payload, uint8(len(msg.SessionAMBR)))
+		payload = append(payload, msg.SessionAMBR...)
+	}
+
+	if len(msg.QoSRules) > 0 {
+		payload = append(payload, 0x7a)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.QoSRules)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.QoSRules...)
+	}
+
+	if len(msg.QoSFlowDescriptions) > 0 {
+		payload = append(payload, 0x79)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.QoSFlowDescriptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.QoSFlowDescriptions...)
+	}
+
+	if len(msg.MappedEPSBearerContexts) > 0 {
+		payload = append(payload, 0x7f)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.MappedEPSBearerContexts)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.MappedEPSBearerContexts...)
 	}
 
 	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
