@@ -109,6 +109,13 @@ const (
 )
 
 const (
+	IdentityTypeSUPI   = 0x01
+	IdentityTypeIMEI   = 0x02
+	IdentityTypeIMEISV = 0x03
+	IdentityTypeSUCI   = 0x04
+)
+
+const (
 	CauseIllegalUE                    = 0x03
 	CauseIMEINotAccepted              = 0x05
 	CauseIllegalME                    = 0x06
@@ -236,6 +243,14 @@ type ServiceRejectMsg struct {
 type DeregistrationRequestMsg struct {
 	DeregistrationType   uint8
 	Cause5GMM            uint8
+}
+
+type IdentityRequestMsg struct {
+	IdentityType uint8
+}
+
+type IdentityResponseMsg struct {
+	MobileIdentity []byte
 }
 
 func DecodeNASPDU(data []byte) (*NASPDU, error) {
@@ -926,4 +941,58 @@ func EncodeDeregistrationRequest(msg *DeregistrationRequestMsg) []byte {
 	}
 
 	return payload
+}
+
+func EncodeIdentityRequest(msg *IdentityRequestMsg) []byte {
+	payload := make([]byte, 0)
+	identityTypeAndSpare := (msg.IdentityType & 0x0f)
+	payload = append(payload, identityTypeAndSpare)
+	return payload
+}
+
+func DecodeIdentityResponse(payload []byte) (*IdentityResponseMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("identity response too short")
+	}
+
+	msg := &IdentityResponseMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case IEISUPIORSUCI:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid mobile identity length")
+			}
+			msg.MobileIdentity = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
 }

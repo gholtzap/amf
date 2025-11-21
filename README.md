@@ -36,6 +36,7 @@
 - Configuration Update Command/Complete
 - GUTI reallocation
 - Authentication Request/Response/Reject
+- Identity Request/Response
 
 ### NAS - SM (Session Management)
 - PDU Session Establishment Request/Accept/Reject
@@ -128,9 +129,6 @@
 
 #### Deregistration
 - Re-registration required
-
-#### Identification
-- Identity Request/Response (SUPI, IMEI concealment)
 
 #### Authentication
 - EAP-AKA' authentication

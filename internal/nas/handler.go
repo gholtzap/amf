@@ -51,6 +51,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return h.HandleRegistrationRequest(ue, pdu.Payload)
 	case MsgTypeAuthenticationResponse:
 		return h.HandleAuthenticationResponse(ue, pdu.Payload)
+	case MsgTypeIdentityResponse:
+		return h.HandleIdentityResponse(ue, pdu.Payload)
 	case MsgTypeSecurityModeComplete:
 		return h.HandleSecurityModeComplete(ue, pdu.Payload)
 	case MsgTypeDeregistrationRequestUEOriginating:
@@ -162,6 +164,37 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	return fmt.Errorf("no authentication vector in response")
 }
 
+func (h *Handler) SendIdentityRequest(ue *context.UEContext, identityType uint8) error {
+	logger.NasLog.Infof("Sending Identity Request to UE for identity type: %d", identityType)
+
+	msg := &IdentityRequestMsg{
+		IdentityType: identityType,
+	}
+
+	payload := EncodeIdentityRequest(msg)
+
+	var nasData []byte
+	var err error
+
+	if ue.SecurityContext != nil && ue.SecurityContext.Activated {
+		nasData, err = EncodeSecuredNASPDU(ue, MsgTypeIdentityRequest, payload,
+			SecurityHeaderTypeIntegrityProtectedAndCiphered)
+		if err != nil {
+			return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+		}
+	} else {
+		pdu := &NASPDU{
+			ProtocolDiscriminator: ProtocolDiscriminator5GMM,
+			SecurityHeaderType:    SecurityHeaderTypePlainNAS,
+			MessageType:           MsgTypeIdentityRequest,
+			Payload:               payload,
+		}
+		nasData = EncodeNASPDU(pdu)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
 func (h *Handler) SendAuthenticationRequest(ue *context.UEContext, rand, autn []byte) error {
 	logger.NasLog.Infof("Sending Authentication Request to UE")
 
@@ -182,6 +215,49 @@ func (h *Handler) SendAuthenticationRequest(ue *context.UEContext, rand, autn []
 
 	nasData := EncodeNASPDU(pdu)
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleIdentityResponse(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Identity Response for UE")
+
+	idResp, err := DecodeIdentityResponse(payload)
+	if err != nil {
+		return fmt.Errorf("failed to decode identity response: %v", err)
+	}
+
+	if len(idResp.MobileIdentity) == 0 {
+		return fmt.Errorf("no mobile identity in identity response")
+	}
+
+	identityType := idResp.MobileIdentity[0] & 0x07
+
+	switch identityType {
+	case 0x01:
+		ue.Supi = hex.EncodeToString(idResp.MobileIdentity)
+		logger.NasLog.Infof("Received SUPI: %s", ue.Supi)
+	case 0x02:
+		guti, err := DecodeGutiMobileIdentity(idResp.MobileIdentity)
+		if err == nil {
+			ue.Guti = guti
+			logger.NasLog.Infof("Received GUTI: %+v", guti)
+		} else {
+			logger.NasLog.Warnf("Failed to decode GUTI: %v", err)
+		}
+	case 0x03:
+		ue.Pei = hex.EncodeToString(idResp.MobileIdentity)
+		logger.NasLog.Infof("Received IMEI: %s", ue.Pei)
+	case 0x04:
+		ue.Pei = hex.EncodeToString(idResp.MobileIdentity)
+		logger.NasLog.Infof("Received IMEISV: %s", ue.Pei)
+	default:
+		logger.NasLog.Warnf("Unknown identity type: 0x%02x", identityType)
+	}
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return nil
 }
 
 func (h *Handler) HandleAuthenticationResponse(ue *context.UEContext, payload []byte) error {
