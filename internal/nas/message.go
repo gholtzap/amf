@@ -99,6 +99,7 @@ const (
 	MsgTypePDUSessionModificationCommand  = 0xca
 	MsgTypePDUSessionReleaseRequest       = 0xd1
 	MsgTypePDUSessionReleaseCommand       = 0xd2
+	MsgTypePDUSessionReleaseComplete      = 0xd3
 )
 
 const (

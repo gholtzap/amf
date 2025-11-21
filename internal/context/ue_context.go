@@ -218,3 +218,15 @@ func (ue *UEContext) GetPduSession(pduSessionId int32) (*PduSessionContext, bool
 	session, ok := ue.PduSessions[pduSessionId]
 	return session, ok
 }
+
+func (ue *UEContext) DeletePduSession(pduSessionId int32) bool {
+	ue.mu.Lock()
+	defer ue.mu.Unlock()
+
+	if _, ok := ue.PduSessions[pduSessionId]; !ok {
+		return false
+	}
+
+	delete(ue.PduSessions, pduSessionId)
+	return true
+}

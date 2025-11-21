@@ -81,6 +81,22 @@ type PDUSessionModificationCommandMsg struct {
 	ExtendedProtocolConfigurationOptions []byte
 }
 
+type PDUSessionReleaseRequestMsg struct {
+	Cause5GSM                            uint8
+	ExtendedProtocolConfigurationOptions []byte
+}
+
+type PDUSessionReleaseCommandMsg struct {
+	Cause5GSM                            uint8
+	BackoffTimer                         []byte
+	ExtendedProtocolConfigurationOptions []byte
+}
+
+type PDUSessionReleaseCompleteMsg struct {
+	Cause5GSM                            uint8
+	ExtendedProtocolConfigurationOptions []byte
+}
+
 func DecodeULNASTransport(payload []byte) (*ULNASTransportMsg, error) {
 	if len(payload) < 2 {
 		return nil, fmt.Errorf("UL NAS transport too short")
@@ -546,6 +562,100 @@ func EncodePDUSessionModificationCommand(msg *PDUSessionModificationCommandMsg) 
 		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.MappedEPSBearerContexts)))
 		payload = append(payload, lengthBytes...)
 		payload = append(payload, msg.MappedEPSBearerContexts...)
+	}
+
+	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
+		payload = append(payload, 0x7b)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ExtendedProtocolConfigurationOptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
+	}
+
+	return payload
+}
+
+func DecodePDUSessionReleaseRequest(payload []byte) (*PDUSessionReleaseRequestMsg, error) {
+	msg := &PDUSessionReleaseRequestMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x59:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.Cause5GSM = payload[offset]
+			offset++
+
+		case 0x7b:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid extended protocol configuration options length")
+			}
+			msg.ExtendedProtocolConfigurationOptions = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodePDUSessionReleaseCommand(msg *PDUSessionReleaseCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.Cause5GSM)
+
+	if len(msg.BackoffTimer) > 0 {
+		payload = append(payload, 0x37)
+		payload = append(payload, uint8(len(msg.BackoffTimer)))
+		payload = append(payload, msg.BackoffTimer...)
+	}
+
+	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {
+		payload = append(payload, 0x7b)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ExtendedProtocolConfigurationOptions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
+	}
+
+	return payload
+}
+
+func EncodePDUSessionReleaseComplete(msg *PDUSessionReleaseCompleteMsg) []byte {
+	payload := make([]byte, 0)
+
+	if msg.Cause5GSM > 0 {
+		payload = append(payload, 0x59)
+		payload = append(payload, msg.Cause5GSM)
 	}
 
 	if len(msg.ExtendedProtocolConfigurationOptions) > 0 {

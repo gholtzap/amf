@@ -1,6 +1,6 @@
 # AMF
 
-## ✅ IMPLEMENTED FEATURES
+## IMPLEMENTED FEATURES
 
 ### NGAP (N2 Interface) Protocol
 - NG Setup Request/Response handling
@@ -38,6 +38,7 @@
 
 ### NAS - SM (Session Management)
 - PDU Session Establishment Request/Accept/Reject
+- PDU Session Release Request/Command/Complete
 - UL/DL NAS Transport for N1 SM messages
 - PDU session context management
 - QoS handling (basic)
@@ -97,7 +98,7 @@
 - PLMN and S-NSSAI support
 - TAI tracking
 
-## ❌ NOT IMPLEMENTED FEATURES
+## NOT IMPLEMENTED FEATURES
 
 ### NGAP Procedures
 - Paging
@@ -157,7 +158,6 @@
 - T3502, T3510, T3511, T3512, T3513, T3516, T3517, T3519, T3520, T3521, T3522, T3525, T3540, T3550, T3555, T3560, T3565, T3570
 
 ### NAS SM Procedures
-- PDU Session Release (Command/Complete)
 - PDU Session Authentication
 - 5GSM Status
 - Always-on PDU session handling

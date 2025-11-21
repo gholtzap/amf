@@ -517,8 +517,7 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 	case MsgTypePDUSessionModificationRequest:
 		return h.HandlePDUSessionModificationRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	case MsgTypePDUSessionReleaseRequest:
-		logger.NasLog.Infof("PDU Session Release Request received for PDU Session ID: %d", ulMsg.PDUSessionID)
-		return nil
+		return h.HandlePDUSessionReleaseRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	default:
 		logger.NasLog.Warnf("Unsupported SM message type: 0x%02x", smMsgType)
 		return nil
@@ -770,6 +769,78 @@ func (h *Handler) SendPDUSessionModificationReject(ue *context.UEContext, pduSes
 	smPDU = append(smPDU, 0x00)
 	smPDU = append(smPDU, MsgTypePDUSessionEstablishmentReject)
 	smPDU = append(smPDU, smRejectPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandlePDUSessionReleaseRequest(ue *context.UEContext, pduSessionID uint8, smMsg []byte) error {
+	logger.NasLog.Infof("Handle PDU Session Release Request for UE SUPI: %s, PDU Session ID: %d", ue.Supi, pduSessionID)
+
+	if len(smMsg) < 3 {
+		return fmt.Errorf("SM message too short")
+	}
+
+	smPayload := smMsg[3:]
+	smReq, err := DecodePDUSessionReleaseRequest(smPayload)
+	if err != nil {
+		return fmt.Errorf("failed to decode PDU session release request: %v", err)
+	}
+
+	if smReq.Cause5GSM > 0 {
+		logger.NasLog.Infof("UE provided release cause: 0x%02x", smReq.Cause5GSM)
+	}
+
+	pduSession, ok := ue.GetPduSession(int32(pduSessionID))
+	if !ok {
+		logger.NasLog.Errorf("PDU Session %d not found for UE %s", pduSessionID, ue.Supi)
+		return nil
+	}
+
+	smfClient := consumer.NewSMFClient(h.amfContext.SmfUri)
+
+	releaseData := &consumer.SmContextReleaseData{
+		Cause: "REL_DUE_TO_UE_REQUEST",
+	}
+
+	_, err = smfClient.ReleaseSMContext(pduSession.SmContextRef, releaseData)
+	if err != nil {
+		logger.NasLog.Warnf("Failed to release SM context: %v", err)
+	}
+
+	if !ue.DeletePduSession(int32(pduSessionID)) {
+		logger.NasLog.Warnf("Failed to delete PDU Session %d from UE context", pduSessionID)
+	}
+
+	logger.NasLog.Infof("PDU Session %d released for UE %s", pduSessionID, ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	completeMsg := &PDUSessionReleaseCompleteMsg{}
+
+	smCompletePayload := EncodePDUSessionReleaseComplete(completeMsg)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionReleaseComplete)
+	smPDU = append(smPDU, smCompletePayload...)
 
 	dlMsg := &DLNASTransportMsg{
 		PayloadContainerType: PayloadContainerTypeN1SMInfo,
