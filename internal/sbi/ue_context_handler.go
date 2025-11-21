@@ -71,7 +71,14 @@ func (s *Server) ReleaseUEContext(ueContextId string, releaseData *UEContextRele
 		logger.SbiLog.Infof("Release cause: group=%d, value=%d", releaseData.NgapCause.Group, releaseData.NgapCause.Value)
 	}
 
-	s.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+	if s.nasHandler != nil && ue.CmState == context.CmConnected {
+		logger.SbiLog.Infof("Sending network-initiated deregistration to UE: %s", ue.Supi)
+		if err := s.nasHandler.SendDeregistrationRequest(ue, 0x01, 0x00); err != nil {
+			logger.SbiLog.Warnf("Failed to send deregistration request: %v", err)
+		}
+	} else {
+		s.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+	}
 
 	logger.SbiLog.Infof("UE Context released for AMF UE NGAP ID: %d", ue.AmfUeNgapId)
 	return nil

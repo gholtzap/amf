@@ -17,10 +17,15 @@ import (
 	"github.com/gavin/amf/pkg/factory"
 )
 
+type NASHandler interface {
+	SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8) error
+}
+
 type Server struct {
 	httpServer *http.Server
 	router     *http.ServeMux
 	amfContext *context.AMFContext
+	nasHandler NASHandler
 }
 
 func NewServer(ctx *context.AMFContext) *Server {
@@ -28,6 +33,10 @@ func NewServer(ctx *context.AMFContext) *Server {
 		router:     http.NewServeMux(),
 		amfContext: ctx,
 	}
+}
+
+func (s *Server) SetNASHandler(handler NASHandler) {
+	s.nasHandler = handler
 }
 
 func (s *Server) Run() error {

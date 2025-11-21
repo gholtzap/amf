@@ -103,6 +103,12 @@ const (
 )
 
 const (
+	DeregistrationTypeNormal      = 0x01
+	DeregistrationTypeReregistration = 0x02
+	DeregistrationTypeDisableN1 = 0x03
+)
+
+const (
 	CauseIllegalUE                    = 0x03
 	CauseIMEINotAccepted              = 0x05
 	CauseIllegalME                    = 0x06
@@ -225,6 +231,11 @@ type ServiceRejectMsg struct {
 	T3346Value           []byte
 	EAPMessage           []byte
 	T3448Value           []byte
+}
+
+type DeregistrationRequestMsg struct {
+	DeregistrationType   uint8
+	Cause5GMM            uint8
 }
 
 func DecodeNASPDU(data []byte) (*NASPDU, error) {
@@ -897,6 +908,21 @@ func EncodeServiceReject(msg *ServiceRejectMsg) []byte {
 		payload = append(payload, 0x6b)
 		payload = append(payload, uint8(len(msg.T3448Value)))
 		payload = append(payload, msg.T3448Value...)
+	}
+
+	return payload
+}
+
+func EncodeDeregistrationRequest(msg *DeregistrationRequestMsg) []byte {
+	payload := make([]byte, 0)
+
+	deregTypeAndSpare := (msg.DeregistrationType & 0x0f)
+	payload = append(payload, deregTypeAndSpare)
+
+	if msg.Cause5GMM > 0 {
+		payload = append(payload, 0x58)
+		payload = append(payload, uint8(1))
+		payload = append(payload, msg.Cause5GMM)
 	}
 
 	return payload

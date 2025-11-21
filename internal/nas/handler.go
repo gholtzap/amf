@@ -55,6 +55,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return h.HandleSecurityModeComplete(ue, pdu.Payload)
 	case MsgTypeDeregistrationRequestUEOriginating:
 		return h.HandleDeregistrationRequest(ue, pdu.Payload)
+	case MsgTypeDeregistrationAcceptUETerminating:
+		return h.HandleDeregistrationAccept(ue, pdu.Payload)
 	case MsgTypeServiceRequest:
 		return h.HandleServiceRequest(ue, pdu.Payload)
 	case MsgTypeRegistrationComplete:
@@ -903,6 +905,63 @@ func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, paylo
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
+
+	return nil
+}
+
+func (h *Handler) SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8) error {
+	logger.NasLog.Infof("Sending Network-Initiated Deregistration Request to UE SUPI: %s", ue.Supi)
+
+	msg := &DeregistrationRequestMsg{
+		DeregistrationType: deregType,
+		Cause5GMM:          cause,
+	}
+
+	payload := EncodeDeregistrationRequest(msg)
+
+	var nasData []byte
+	var err error
+
+	if ue.SecurityContext != nil && ue.SecurityContext.Activated {
+		nasData, err = EncodeSecuredNASPDU(ue, MsgTypeDeregistrationRequestUETerminating, payload,
+			SecurityHeaderTypeIntegrityProtectedAndCiphered)
+		if err != nil {
+			return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+		}
+	} else {
+		pdu := &NASPDU{
+			ProtocolDiscriminator: ProtocolDiscriminator5GMM,
+			SecurityHeaderType:    SecurityHeaderTypePlainNAS,
+			MessageType:           MsgTypeDeregistrationRequestUETerminating,
+			Payload:               payload,
+		}
+		nasData = EncodeNASPDU(pdu)
+	}
+
+	ue.RegistrationState = context.RegStateDeregistered
+	ue.RmState = context.RmDeregistered
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleDeregistrationAccept(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Deregistration Accept (UE Terminating) for UE SUPI: %s", ue.Supi)
+
+	logger.NasLog.Infof("Network-initiated deregistration completed successfully for UE: %s", ue.Supi)
+
+	ue.RegistrationState = context.RegStateDeregistered
+	ue.RmState = context.RmDeregistered
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	h.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+	logger.NasLog.Infof("UE context deleted for AMF UE NGAP ID: %d", ue.AmfUeNgapId)
 
 	return nil
 }

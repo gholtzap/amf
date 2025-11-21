@@ -32,7 +32,7 @@
 
 #### Other MM Procedures
 - Service Request/Accept
-- Deregistration (UE-initiated)
+- Deregistration (UE-initiated and Network-initiated)
 - Configuration Update Command/Complete
 - GUTI reallocation
 - Authentication Request/Response/Reject
@@ -127,7 +127,6 @@
 - Disaster roaming
 
 #### Deregistration
-- Network-initiated deregistration
 - Re-registration required
 
 #### Identification

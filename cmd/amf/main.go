@@ -124,6 +124,7 @@ func main() {
 	}
 
 	sbiServer := sbi.NewServer(amfContext)
+	sbiServer.SetNASHandler(nasHandler)
 
 	go func() {
 		if err := sbiServer.Run(); err != nil {
