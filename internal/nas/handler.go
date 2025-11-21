@@ -373,20 +373,110 @@ func (h *Handler) HandleDeregistrationRequest(ue *context.UEContext, payload []b
 func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Service Request for UE SUPI: %s", ue.Supi)
 
+	srvReq, err := DecodeServiceRequest(payload)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to decode service request: %v", err)
+		return h.SendServiceReject(ue, CauseProtocolError)
+	}
+
+	logger.NasLog.Infof("Service Type: %d, NgKSI: %d", srvReq.ServiceType, srvReq.NgKSI)
+
+	if ue.RmState != context.RmRegistered {
+		logger.NasLog.Errorf("UE not in RM-REGISTERED state: %s", ue.RmState)
+		return h.SendServiceReject(ue, Cause5GSServicesNotAllowed)
+	}
+
+	if ue.CmState != context.CmIdle {
+		logger.NasLog.Warnf("UE not in CM-IDLE state: %s", ue.CmState)
+	}
+
+	if ue.SecurityContext == nil || !ue.SecurityContext.Activated {
+		logger.NasLog.Errorf("Security context not activated for UE: %s", ue.Supi)
+		return h.SendServiceReject(ue, CauseSecurityModeRejectedUnspecified)
+	}
+
+	if int(srvReq.NgKSI) != ue.NgKsi {
+		logger.NasLog.Warnf("NgKSI mismatch - Request: %d, Expected: %d", srvReq.NgKSI, ue.NgKsi)
+	}
+
 	ue.CmState = context.CmConnected
+
+	activePduSessions := []uint8{}
+	if len(srvReq.PDUSessionStatus) > 0 {
+		logger.NasLog.Infof("PDU Session Status present in Service Request")
+		for i := 0; i < len(srvReq.PDUSessionStatus) && i < 16; i++ {
+			statusByte := srvReq.PDUSessionStatus[i]
+			for bit := 0; bit < 8; bit++ {
+				if statusByte&(1<<bit) != 0 {
+					pduSessionId := uint8(i*8 + bit)
+					if pduSession, ok := ue.GetPduSession(int32(pduSessionId)); ok {
+						if pduSession.State == context.PduSessionActive {
+							activePduSessions = append(activePduSessions, pduSessionId)
+							logger.NasLog.Infof("PDU Session %d is active", pduSessionId)
+						}
+					}
+				}
+			}
+		}
+	} else {
+		for pduSessionId, pduSession := range ue.PduSessions {
+			if pduSession.State == context.PduSessionActive {
+				activePduSessions = append(activePduSessions, uint8(pduSessionId))
+			}
+		}
+	}
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
 
-	pdu := &NASPDU{
-		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
-		SecurityHeaderType:    SecurityHeaderTypePlainNAS,
-		MessageType:           MsgTypeServiceAccept,
-		Payload:               []byte{},
+	return h.SendServiceAccept(ue, activePduSessions)
+}
+
+func (h *Handler) SendServiceAccept(ue *context.UEContext, activePduSessions []uint8) error {
+	logger.NasLog.Infof("Sending Service Accept to UE SUPI: %s", ue.Supi)
+
+	msg := &ServiceAcceptMsg{}
+
+	if len(activePduSessions) > 0 {
+		pduSessionStatusBytes := make([]byte, 2)
+		for _, pduSessionId := range activePduSessions {
+			byteIndex := pduSessionId / 8
+			bitIndex := pduSessionId % 8
+			if int(byteIndex) < len(pduSessionStatusBytes) {
+				pduSessionStatusBytes[byteIndex] |= (1 << bitIndex)
+			}
+		}
+		msg.PDUSessionStatus = pduSessionStatusBytes
+		logger.NasLog.Infof("PDU Session Status in Service Accept: %d sessions active", len(activePduSessions))
 	}
 
-	nasData := EncodeNASPDU(pdu)
+	acceptPayload := EncodeServiceAccept(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeServiceAccept, acceptPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) SendServiceReject(ue *context.UEContext, cause uint8) error {
+	logger.NasLog.Infof("Sending Service Reject to UE SUPI: %s with cause: 0x%02x", ue.Supi, cause)
+
+	msg := &ServiceRejectMsg{
+		Cause5GMM: cause,
+	}
+
+	rejectPayload := EncodeServiceReject(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeServiceReject, rejectPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 

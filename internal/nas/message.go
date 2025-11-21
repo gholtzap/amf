@@ -201,6 +201,31 @@ type ConfigurationUpdateCommandMsg struct {
 type ConfigurationUpdateCompleteMsg struct {
 }
 
+type ServiceRequestMsg struct {
+	NgKSI                uint8
+	ServiceType          uint8
+	TMSI                 uint32
+	UplinkDataStatus     []byte
+	PDUSessionStatus     []byte
+	AllowedPDUSessionStatus []byte
+	NASMessageContainer  []byte
+}
+
+type ServiceAcceptMsg struct {
+	PDUSessionStatus                []byte
+	PDUSessionReactivationResult    []byte
+	PDUSessionReactivationResultErrorCause []byte
+	EAPMessage                      []byte
+}
+
+type ServiceRejectMsg struct {
+	Cause5GMM            uint8
+	PDUSessionStatus     []byte
+	T3346Value           []byte
+	EAPMessage           []byte
+	T3448Value           []byte
+}
+
 func DecodeNASPDU(data []byte) (*NASPDU, error) {
 	if len(data) < 2 {
 		return nil, fmt.Errorf("NAS message too short")
@@ -705,4 +730,173 @@ func EncodeConfigurationUpdateCommand(msg *ConfigurationUpdateCommandMsg) []byte
 func DecodeConfigurationUpdateComplete(payload []byte) (*ConfigurationUpdateCompleteMsg, error) {
 	msg := &ConfigurationUpdateCompleteMsg{}
 	return msg, nil
+}
+
+func DecodeServiceRequest(payload []byte) (*ServiceRequestMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("service request too short")
+	}
+
+	msg := &ServiceRequestMsg{}
+	offset := 0
+
+	msg.NgKSI = (payload[offset] >> 4) & 0x0f
+	msg.ServiceType = payload[offset] & 0x0f
+	offset++
+
+	if offset+4 <= len(payload) {
+		msg.TMSI = binary.BigEndian.Uint32(payload[offset : offset+4])
+		offset += 4
+	}
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x40:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid uplink data status length")
+			}
+			msg.UplinkDataStatus = payload[offset : offset+length]
+			offset += length
+
+		case IEIPDUSessionStatus:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid PDU session status length")
+			}
+			msg.PDUSessionStatus = payload[offset : offset+length]
+			offset += length
+
+		case 0x25:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid allowed PDU session status length")
+			}
+			msg.AllowedPDUSessionStatus = payload[offset : offset+length]
+			offset += length
+
+		case 0x71:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid NAS message container length")
+			}
+			msg.NASMessageContainer = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func EncodeServiceAccept(msg *ServiceAcceptMsg) []byte {
+	payload := make([]byte, 0)
+
+	if len(msg.PDUSessionStatus) > 0 {
+		payload = append(payload, IEIPDUSessionStatus)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.PDUSessionStatus)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.PDUSessionStatus...)
+	}
+
+	if len(msg.PDUSessionReactivationResult) > 0 {
+		payload = append(payload, 0x26)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.PDUSessionReactivationResult)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.PDUSessionReactivationResult...)
+	}
+
+	if len(msg.PDUSessionReactivationResultErrorCause) > 0 {
+		payload = append(payload, 0x72)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.PDUSessionReactivationResultErrorCause)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.PDUSessionReactivationResultErrorCause...)
+	}
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, IEIEAPMessage)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
+	}
+
+	return payload
+}
+
+func EncodeServiceReject(msg *ServiceRejectMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.Cause5GMM)
+
+	if len(msg.PDUSessionStatus) > 0 {
+		payload = append(payload, IEIPDUSessionStatus)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.PDUSessionStatus)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.PDUSessionStatus...)
+	}
+
+	if len(msg.T3346Value) > 0 {
+		payload = append(payload, 0x5f)
+		payload = append(payload, uint8(len(msg.T3346Value)))
+		payload = append(payload, msg.T3346Value...)
+	}
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, IEIEAPMessage)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
+	}
+
+	if len(msg.T3448Value) > 0 {
+		payload = append(payload, 0x6b)
+		payload = append(payload, uint8(len(msg.T3448Value)))
+		payload = append(payload, msg.T3448Value...)
+	}
+
+	return payload
 }
