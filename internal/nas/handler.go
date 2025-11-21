@@ -60,6 +60,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 	case MsgTypeRegistrationComplete:
 		logger.NasLog.Infof("Registration Complete received for UE: %s", ue.Supi)
 		return nil
+	case MsgTypeConfigurationUpdateComplete:
+		return h.HandleConfigurationUpdateComplete(ue, pdu.Payload)
 	case MsgTypeULNASTransport:
 		return h.HandleULNASTransport(ue, pdu.Payload)
 	default:
@@ -79,10 +81,31 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	ue.RegistrationType = regReq.RegistrationType
 	ue.NgKsi = int(regReq.NgKSI)
 
+	var existingUe *context.UEContext
+	isGutiRegistration := false
+
 	if len(regReq.MobileIdentity) > 0 {
-		suci := hex.EncodeToString(regReq.MobileIdentity)
-		ue.Supi = suci
-		logger.NasLog.Infof("Registration Request from SUCI: %s", suci)
+		guti, err := DecodeGutiMobileIdentity(regReq.MobileIdentity)
+		if err == nil {
+			logger.NasLog.Infof("Registration Request with GUTI: %+v", guti)
+			isGutiRegistration = true
+
+			if foundUe, ok := h.amfContext.GetUEContextByGuti(guti); ok {
+				existingUe = foundUe
+				logger.NasLog.Infof("Found existing UE context for GUTI")
+
+				ue.Supi = existingUe.Supi
+				ue.Guti = existingUe.Guti
+				ue.SecurityContext = existingUe.SecurityContext
+				ue.SubscriptionData = existingUe.SubscriptionData
+			} else {
+				logger.NasLog.Warnf("GUTI not found in AMF context")
+			}
+		} else {
+			suci := hex.EncodeToString(regReq.MobileIdentity)
+			ue.Supi = suci
+			logger.NasLog.Infof("Registration Request from SUCI: %s", suci)
+		}
 	}
 
 	if len(regReq.UESecurityCapability) > 0 {
@@ -94,6 +117,14 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	if isGutiRegistration && existingUe != nil &&
+	   (regReq.RegistrationType == RegistrationTypePeriodicUpdate ||
+	    regReq.RegistrationType == RegistrationTypeMobilityUpdate) &&
+	   ue.SecurityContext != nil && ue.SecurityContext.Activated {
+		logger.NasLog.Infof("Skipping authentication for periodic/mobility update with existing context")
+		return h.SendRegistrationAccept(ue)
 	}
 
 	ausfClient := consumer.NewAUSFClient(h.amfContext.AusfUri)
@@ -274,8 +305,14 @@ func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []by
 func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	logger.NasLog.Infof("Sending Registration Accept to UE")
 
+	if ue.Guti == nil {
+		ue.Guti = h.amfContext.AllocateGuti()
+		logger.NasLog.Infof("Allocated GUTI for UE: %+v", ue.Guti)
+	}
+
 	msg := &RegistrationAcceptMsg{
 		RegistrationResult: 0x01,
+		MobileIdentity:    EncodeGutiMobileIdentity(ue.Guti),
 		AllowedNSSAI:      []byte{0x01, 0x01, 0x01},
 		T3512Value:        []byte{0x5e, 0x01, 0x3c},
 	}
@@ -546,4 +583,52 @@ func (h *Handler) SendPDUSessionEstablishmentReject(ue *context.UEContext, pduSe
 	}
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) SendConfigurationUpdateCommand(ue *context.UEContext, newGuti *context.Guti) error {
+	logger.NasLog.Infof("Sending Configuration Update Command to UE")
+
+	if newGuti == nil {
+		newGuti = h.amfContext.AllocateGuti()
+	}
+
+	msg := &ConfigurationUpdateCommandMsg{
+		ConfigurationUpdateIndication: 0x01,
+		Guti:                          EncodeGutiMobileIdentity(newGuti),
+	}
+
+	payload := EncodeConfigurationUpdateCommand(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeConfigurationUpdateCommand, payload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	ue.Guti = newGuti
+	logger.NasLog.Infof("Allocated new GUTI for UE: %+v", newGuti)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Configuration Update Complete for UE SUPI: %s", ue.Supi)
+
+	_, err := DecodeConfigurationUpdateComplete(payload)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to decode Configuration Update Complete: %v", err)
+		return err
+	}
+
+	logger.NasLog.Infof("Configuration Update Complete processed successfully for UE: %s", ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return nil
 }

@@ -13,7 +13,7 @@ type UEContext struct {
 	Supi        string // Subscription Permanent Identifier (IMSI)
 	Suci        string // Subscription Concealed Identifier
 	Pei         string // Permanent Equipment Identifier (IMEI)
-	Guti        string // 5G Globally Unique Temporary Identifier
+	Guti        *Guti  // 5G Globally Unique Temporary Identifier
 
 	// NGAP IDs
 	RanUeNgapId int64  // RAN UE NGAP ID

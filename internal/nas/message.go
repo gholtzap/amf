@@ -3,6 +3,8 @@ package nas
 import (
 	"encoding/binary"
 	"fmt"
+
+	"github.com/gavin/amf/internal/context"
 )
 
 const (
@@ -183,6 +185,22 @@ type SecurityModeCompleteMsg struct {
 	NASMessageContainer   []byte
 }
 
+type ConfigurationUpdateCommandMsg struct {
+	ConfigurationUpdateIndication uint8
+	Guti                          []byte
+	TAIList                       []byte
+	AllowedNSSAI                  []byte
+	ServiceAreaList               []byte
+	FullNameForNetwork            []byte
+	ShortNameForNetwork           []byte
+	LocalTimeZone                 []byte
+	NetworkDaylightSavingTime     []byte
+	LADNInformation               []byte
+}
+
+type ConfigurationUpdateCompleteMsg struct {
+}
+
 func DecodeNASPDU(data []byte) (*NASPDU, error) {
 	if len(data) < 2 {
 		return nil, fmt.Errorf("NAS message too short")
@@ -315,6 +333,93 @@ func DecodeRegistrationRequest(payload []byte) (*RegistrationRequestMsg, error) 
 	}
 
 	return msg, nil
+}
+
+func DecodeGutiMobileIdentity(mobileIdentity []byte) (*context.Guti, error) {
+	if len(mobileIdentity) < 11 {
+		return nil, fmt.Errorf("invalid GUTI length: %d", len(mobileIdentity))
+	}
+
+	identityType := mobileIdentity[0] & 0x07
+	if identityType != 0x02 {
+		return nil, fmt.Errorf("not a GUTI (type: 0x%02x)", identityType)
+	}
+
+	mcc := fmt.Sprintf("%d%d%d",
+		mobileIdentity[1]&0x0f,
+		(mobileIdentity[1]>>4)&0x0f,
+		mobileIdentity[2]&0x0f)
+
+	var mnc string
+	if (mobileIdentity[2]>>4)&0x0f == 0x0f {
+		mnc = fmt.Sprintf("%d%d",
+			mobileIdentity[3]&0x0f,
+			(mobileIdentity[3]>>4)&0x0f)
+	} else {
+		mnc = fmt.Sprintf("%d%d%d",
+			mobileIdentity[3]&0x0f,
+			(mobileIdentity[3]>>4)&0x0f,
+			(mobileIdentity[2]>>4)&0x0f)
+	}
+
+	amfRegionId := fmt.Sprintf("%02x", mobileIdentity[4])
+	amfSetId := fmt.Sprintf("%03x", (uint16(mobileIdentity[5])<<2)|uint16((mobileIdentity[6]>>6)&0x03))
+	amfPointer := fmt.Sprintf("%02x", mobileIdentity[6]&0x3f)
+	tmsi := binary.BigEndian.Uint32(mobileIdentity[7:11])
+
+	return &context.Guti{
+		PlmnId: context.PlmnId{
+			Mcc: mcc,
+			Mnc: mnc,
+		},
+		AmfRegionId: amfRegionId,
+		AmfSetId:    amfSetId,
+		AmfPointer:  amfPointer,
+		Tmsi:        tmsi,
+	}, nil
+}
+
+func EncodeGutiMobileIdentity(guti *context.Guti) []byte {
+	if guti == nil {
+		return nil
+	}
+
+	mobileIdentity := make([]byte, 11)
+
+	mobileIdentity[0] = 0xf2
+
+	mcc := []byte(guti.PlmnId.Mcc)
+	mnc := []byte(guti.PlmnId.Mnc)
+
+	mobileIdentity[1] = ((mcc[0] - '0') << 0) | ((mcc[1] - '0') << 4)
+	if len(mnc) == 2 {
+		mobileIdentity[2] = ((mcc[2] - '0') << 0) | 0xf0
+		mobileIdentity[3] = ((mnc[0] - '0') << 0) | ((mnc[1] - '0') << 4)
+	} else {
+		mobileIdentity[2] = ((mcc[2] - '0') << 0) | ((mnc[2] - '0') << 4)
+		mobileIdentity[3] = ((mnc[0] - '0') << 0) | ((mnc[1] - '0') << 4)
+	}
+
+	amfRegionId := uint8(0)
+	if len(guti.AmfRegionId) > 0 {
+		fmt.Sscanf(guti.AmfRegionId, "%x", &amfRegionId)
+	}
+	amfSetId := uint16(0)
+	if len(guti.AmfSetId) > 0 {
+		fmt.Sscanf(guti.AmfSetId, "%x", &amfSetId)
+	}
+	amfPointer := uint8(0)
+	if len(guti.AmfPointer) > 0 {
+		fmt.Sscanf(guti.AmfPointer, "%x", &amfPointer)
+	}
+
+	mobileIdentity[4] = amfRegionId
+	mobileIdentity[5] = uint8((amfSetId >> 2) & 0xff)
+	mobileIdentity[6] = uint8((uint8(amfSetId&0x03) << 6) | (amfPointer & 0x3f))
+
+	binary.BigEndian.PutUint32(mobileIdentity[7:11], guti.Tmsi)
+
+	return mobileIdentity
 }
 
 func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
@@ -525,5 +630,79 @@ func DecodeSecurityModeComplete(payload []byte) (*SecurityModeCompleteMsg, error
 		}
 	}
 
+	return msg, nil
+}
+
+func EncodeConfigurationUpdateCommand(msg *ConfigurationUpdateCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	if msg.ConfigurationUpdateIndication > 0 {
+		payload = append(payload, 0xd0|(msg.ConfigurationUpdateIndication&0x0f))
+	}
+
+	if len(msg.Guti) > 0 {
+		payload = append(payload, IEIGUTI)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.Guti)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.Guti...)
+	}
+
+	if len(msg.TAIList) > 0 {
+		payload = append(payload, 0x54)
+		payload = append(payload, uint8(len(msg.TAIList)))
+		payload = append(payload, msg.TAIList...)
+	}
+
+	if len(msg.AllowedNSSAI) > 0 {
+		payload = append(payload, IEIAllowedNSSAI)
+		payload = append(payload, uint8(len(msg.AllowedNSSAI)))
+		payload = append(payload, msg.AllowedNSSAI...)
+	}
+
+	if len(msg.ServiceAreaList) > 0 {
+		payload = append(payload, 0x27)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.ServiceAreaList)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.ServiceAreaList...)
+	}
+
+	if len(msg.FullNameForNetwork) > 0 {
+		payload = append(payload, 0x43)
+		payload = append(payload, uint8(len(msg.FullNameForNetwork)))
+		payload = append(payload, msg.FullNameForNetwork...)
+	}
+
+	if len(msg.ShortNameForNetwork) > 0 {
+		payload = append(payload, 0x45)
+		payload = append(payload, uint8(len(msg.ShortNameForNetwork)))
+		payload = append(payload, msg.ShortNameForNetwork...)
+	}
+
+	if len(msg.LocalTimeZone) > 0 {
+		payload = append(payload, 0x46)
+		payload = append(payload, msg.LocalTimeZone...)
+	}
+
+	if len(msg.NetworkDaylightSavingTime) > 0 {
+		payload = append(payload, 0x49)
+		payload = append(payload, uint8(len(msg.NetworkDaylightSavingTime)))
+		payload = append(payload, msg.NetworkDaylightSavingTime...)
+	}
+
+	if len(msg.LADNInformation) > 0 {
+		payload = append(payload, 0x79)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.LADNInformation)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.LADNInformation...)
+	}
+
+	return payload
+}
+
+func DecodeConfigurationUpdateComplete(payload []byte) (*ConfigurationUpdateCompleteMsg, error) {
+	msg := &ConfigurationUpdateCompleteMsg{}
 	return msg, nil
 }

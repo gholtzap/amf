@@ -3,6 +3,7 @@ package context
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gavin/amf/internal/consumer"
@@ -50,6 +51,9 @@ type AMFContext struct {
 	SubscriptionRepo   SubscriptionRepository
 	persistenceEnabled bool
 
+	amfUeNgapIdCounter int64
+	tmsiCounter        uint32
+
 	mu sync.RWMutex
 }
 
@@ -83,6 +87,14 @@ type Guami struct {
 	AmfRegionId string
 	AmfSetId    string
 	AmfPointer  string
+}
+
+type Guti struct {
+	PlmnId      PlmnId
+	AmfRegionId string
+	AmfSetId    string
+	AmfPointer  string
+	Tmsi        uint32
 }
 
 type PlmnId struct {
@@ -140,6 +152,28 @@ func (c *AMFContext) GetUEContextByAmfUeNgapId(id int64) (*UEContext, bool) {
 	return value.(*UEContext), true
 }
 
+func (c *AMFContext) GetUEContextByGuti(guti *Guti) (*UEContext, bool) {
+	var foundUe *UEContext
+	c.UeContexts.Range(func(key, value interface{}) bool {
+		ue := value.(*UEContext)
+		if ue.Guti != nil &&
+		   ue.Guti.PlmnId.Mcc == guti.PlmnId.Mcc &&
+		   ue.Guti.PlmnId.Mnc == guti.PlmnId.Mnc &&
+		   ue.Guti.AmfRegionId == guti.AmfRegionId &&
+		   ue.Guti.AmfSetId == guti.AmfSetId &&
+		   ue.Guti.AmfPointer == guti.AmfPointer &&
+		   ue.Guti.Tmsi == guti.Tmsi {
+			foundUe = ue
+			return false
+		}
+		return true
+	})
+	if foundUe != nil {
+		return foundUe, true
+	}
+	return nil, false
+}
+
 func (c *AMFContext) DeleteUEContext(amfUeNgapId int64) {
 	c.UeContexts.Delete(amfUeNgapId)
 	logger.CtxLog.Infof("UE Context deleted, AMF UE NGAP ID: %d", amfUeNgapId)
@@ -152,8 +186,32 @@ func (c *AMFContext) DeleteUEContext(amfUeNgapId int64) {
 }
 
 func (c *AMFContext) allocateAmfUeNgapId() int64 {
+	return atomic.AddInt64(&c.amfUeNgapIdCounter, 1)
+}
 
-	return 1
+func (c *AMFContext) allocateTmsi() uint32 {
+	return atomic.AddUint32(&c.tmsiCounter, 1)
+}
+
+func (c *AMFContext) AllocateGuti() *Guti {
+	if len(c.ServedGuami) == 0 {
+		logger.CtxLog.Warn("No GUAMI configured, cannot allocate GUTI")
+		return nil
+	}
+
+	guami := c.ServedGuami[0]
+	tmsi := c.allocateTmsi()
+
+	guti := &Guti{
+		PlmnId: guami.PlmnId,
+		AmfRegionId: guami.AmfRegionId,
+		AmfSetId: guami.AmfSetId,
+		AmfPointer: guami.AmfPointer,
+		Tmsi: tmsi,
+	}
+
+	logger.CtxLog.Infof("Allocated GUTI: %+v", guti)
+	return guti
 }
 
 func (c *AMFContext) StoreEventSubscription(subscriptionId string, subscription interface{}) {

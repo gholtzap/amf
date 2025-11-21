@@ -173,17 +173,33 @@ func (s *Server) findUEContextById(ueContextId string) *context.UEContext {
 	return foundUe
 }
 
-func (s *Server) findUEContextByGuti(guti string) *context.UEContext {
+func (s *Server) findUEContextByGuti(gutiStr string) *context.UEContext {
 	var foundUe *context.UEContext
 	s.amfContext.UeContexts.Range(func(key, value interface{}) bool {
 		ue := value.(*context.UEContext)
-		if ue.Guti == guti {
-			foundUe = ue
-			return false
+		if ue.Guti != nil {
+			ueGutiStr := gutiToString(ue.Guti)
+			if ueGutiStr == gutiStr {
+				foundUe = ue
+				return false
+			}
 		}
 		return true
 	})
 	return foundUe
+}
+
+func gutiToString(guti *context.Guti) string {
+	if guti == nil {
+		return ""
+	}
+	return fmt.Sprintf("5g-guti-%s-%s-%s-%s-%s-%d",
+		guti.PlmnId.Mcc,
+		guti.PlmnId.Mnc,
+		guti.AmfRegionId,
+		guti.AmfSetId,
+		guti.AmfPointer,
+		guti.Tmsi)
 }
 
 func (s *Server) handleGetUEContext(w http.ResponseWriter, r *http.Request, ueContextId string) {
@@ -433,8 +449,8 @@ func (s *Server) QueryUEContexts(supi string, gpsi string) (*UeContextSearchResu
 		var ueContextId string
 		if ue.Supi != "" {
 			ueContextId = ue.Supi
-		} else if ue.Guti != "" {
-			ueContextId = "5g-guti-" + ue.Guti
+		} else if ue.Guti != nil {
+			ueContextId = gutiToString(ue.Guti)
 		} else {
 			ueContextId = fmt.Sprintf("amf-ue-ngap-id-%d", ue.AmfUeNgapId)
 		}

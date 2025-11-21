@@ -23,7 +23,7 @@ type UEContextDocument struct {
 	Supi                  string                                 `bson:"supi,omitempty"`
 	Suci                  string                                 `bson:"suci,omitempty"`
 	Pei                   string                                 `bson:"pei,omitempty"`
-	Guti                  string                                 `bson:"guti,omitempty"`
+	Guti                  *GutiDocument                          `bson:"guti,omitempty"`
 	RegistrationType      uint8                                  `bson:"registration_type"`
 	NgKsi                 int                                    `bson:"ng_ksi"`
 	AuthenticationCtxId   string                                 `bson:"authentication_ctx_id,omitempty"`
@@ -49,6 +49,14 @@ type TaiDocument struct {
 type PlmnIdDocument struct {
 	Mcc string `bson:"mcc"`
 	Mnc string `bson:"mnc"`
+}
+
+type GutiDocument struct {
+	PlmnId      PlmnIdDocument `bson:"plmn_id"`
+	AmfRegionId string         `bson:"amf_region_id"`
+	AmfSetId    string         `bson:"amf_set_id"`
+	AmfPointer  string         `bson:"amf_pointer"`
+	Tmsi        uint32         `bson:"tmsi"`
 }
 
 type SecurityContextDocument struct {
@@ -167,13 +175,27 @@ func (r *UERepository) Delete(amfUeNgapId int64) error {
 }
 
 func (r *UERepository) toDocument(ue *amfcontext.UEContext) *UEContextDocument {
+	var gutiDoc *GutiDocument
+	if ue.Guti != nil {
+		gutiDoc = &GutiDocument{
+			PlmnId: PlmnIdDocument{
+				Mcc: ue.Guti.PlmnId.Mcc,
+				Mnc: ue.Guti.PlmnId.Mnc,
+			},
+			AmfRegionId: ue.Guti.AmfRegionId,
+			AmfSetId:    ue.Guti.AmfSetId,
+			AmfPointer:  ue.Guti.AmfPointer,
+			Tmsi:        ue.Guti.Tmsi,
+		}
+	}
+
 	doc := &UEContextDocument{
 		AmfUeNgapId:          ue.AmfUeNgapId,
 		RanUeNgapId:          ue.RanUeNgapId,
 		Supi:                 ue.Supi,
 		Suci:                 ue.Suci,
 		Pei:                  ue.Pei,
-		Guti:                 ue.Guti,
+		Guti:                 gutiDoc,
 		RegistrationType:     ue.RegistrationType,
 		NgKsi:                ue.NgKsi,
 		AuthenticationCtxId:  ue.AuthenticationCtxId,
@@ -231,13 +253,27 @@ func (r *UERepository) toDocument(ue *amfcontext.UEContext) *UEContextDocument {
 }
 
 func (r *UERepository) fromDocument(doc *UEContextDocument) *amfcontext.UEContext {
+	var guti *amfcontext.Guti
+	if doc.Guti != nil {
+		guti = &amfcontext.Guti{
+			PlmnId: amfcontext.PlmnId{
+				Mcc: doc.Guti.PlmnId.Mcc,
+				Mnc: doc.Guti.PlmnId.Mnc,
+			},
+			AmfRegionId: doc.Guti.AmfRegionId,
+			AmfSetId:    doc.Guti.AmfSetId,
+			AmfPointer:  doc.Guti.AmfPointer,
+			Tmsi:        doc.Guti.Tmsi,
+		}
+	}
+
 	ue := &amfcontext.UEContext{
 		AmfUeNgapId:          doc.AmfUeNgapId,
 		RanUeNgapId:          doc.RanUeNgapId,
 		Supi:                 doc.Supi,
 		Suci:                 doc.Suci,
 		Pei:                  doc.Pei,
-		Guti:                 doc.Guti,
+		Guti:                 guti,
 		RegistrationType:     doc.RegistrationType,
 		NgKsi:                doc.NgKsi,
 		AuthenticationCtxId:  doc.AuthenticationCtxId,
