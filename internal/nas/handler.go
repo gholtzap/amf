@@ -92,6 +92,10 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	ue.RegistrationState = context.RegStateRegistering
 	ue.RmState = context.RmRegistered
 
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
 	ausfClient := consumer.NewAUSFClient(h.amfContext.AusfUri)
 	servingNetwork := fmt.Sprintf("5G:mnc%s.mcc%s.3gppnetwork.org",
 		h.amfContext.ServedGuami[0].PlmnId.Mnc,
@@ -183,6 +187,10 @@ func (h *Handler) HandleAuthenticationResponse(ue *context.UEContext, payload []
 	ue.SecurityContext.IntegrityAlgorithm = AlgorithmNIA2
 	ue.SecurityContext.CipheringAlgorithm = AlgorithmNEA2
 
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
 	return h.SendSecurityModeCommand(ue)
 }
 
@@ -238,6 +246,10 @@ func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []by
 
 	ue.SecurityContext.Activated = true
 
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
 	udmClient := consumer.NewUDMClient(h.amfContext.UdmUri)
 	plmnId := h.amfContext.ServedGuami[0].PlmnId.Mcc + h.amfContext.ServedGuami[0].PlmnId.Mnc
 
@@ -279,6 +291,10 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	ue.RegistrationState = context.RegStateRegistered
 	logger.NasLog.Infof("UE %s successfully registered", ue.Supi)
 
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 
@@ -302,6 +318,10 @@ func (h *Handler) HandleDeregistrationRequest(ue *context.UEContext, payload []b
 	ue.RegistrationState = context.RegStateDeregistered
 	ue.RmState = context.RmDeregistered
 
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
 	pdu := &NASPDU{
 		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
 		SecurityHeaderType:    SecurityHeaderTypePlainNAS,
@@ -317,6 +337,10 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 	logger.NasLog.Infof("Handle Service Request for UE SUPI: %s", ue.Supi)
 
 	ue.CmState = context.CmConnected
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
 
 	pdu := &NASPDU{
 		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
@@ -435,6 +459,10 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 
 	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
 	logger.NasLog.Infof("PDU Session %d created for UE %s", pduSessionID, ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
 
 	acceptMsg := &PDUSessionEstablishmentAcceptMsg{
 		PDUSessionType: 1,

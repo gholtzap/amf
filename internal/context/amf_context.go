@@ -45,7 +45,36 @@ type AMFContext struct {
 
 	heartbeatCancel chan struct{}
 
+	DbClient           DatabaseClient
+	UeRepo             UERepository
+	SubscriptionRepo   SubscriptionRepository
+	persistenceEnabled bool
+
 	mu sync.RWMutex
+}
+
+type DatabaseClient interface {
+	Disconnect() error
+}
+
+type UERepository interface {
+	Save(ue *UEContext) error
+	FindByAmfUeNgapId(id int64) (*UEContext, error)
+	FindAll() ([]*UEContext, error)
+	Delete(amfUeNgapId int64) error
+}
+
+type SubscriptionRepository interface {
+	SaveN1N2Subscription(subscriptionId, ueContextId, n1MessageClass, n1NotifyCallbackUri, n2InformationClass, n2NotifyCallbackUri, nfId string) error
+	FindN1N2Subscription(subscriptionId string) (interface{}, error)
+	FindAllN1N2Subscriptions() ([]interface{}, error)
+	DeleteN1N2Subscription(subscriptionId string) error
+	SaveEventSubscription(subscriptionId string, data map[string]interface{}) error
+	FindAllEventSubscriptions() ([]interface{}, error)
+	DeleteEventSubscription(subscriptionId string) error
+	SaveAMFStatusSubscription(subscriptionId string, data map[string]interface{}) error
+	FindAllAMFStatusSubscriptions() ([]interface{}, error)
+	DeleteAMFStatusSubscription(subscriptionId string) error
 }
 
 type Guami struct {
@@ -93,6 +122,13 @@ func (c *AMFContext) NewUEContext(ranUeNgapId int64) *UEContext {
 	}
 	c.UeContexts.Store(ue.AmfUeNgapId, ue)
 	logger.CtxLog.Infof("New UE Context created, AMF UE NGAP ID: %d", ue.AmfUeNgapId)
+
+	if c.persistenceEnabled && c.UeRepo != nil {
+		if err := c.UeRepo.Save(ue); err != nil {
+			logger.CtxLog.Errorf("Failed to persist UE context: %v", err)
+		}
+	}
+
 	return ue
 }
 
@@ -107,6 +143,12 @@ func (c *AMFContext) GetUEContextByAmfUeNgapId(id int64) (*UEContext, bool) {
 func (c *AMFContext) DeleteUEContext(amfUeNgapId int64) {
 	c.UeContexts.Delete(amfUeNgapId)
 	logger.CtxLog.Infof("UE Context deleted, AMF UE NGAP ID: %d", amfUeNgapId)
+
+	if c.persistenceEnabled && c.UeRepo != nil {
+		if err := c.UeRepo.Delete(amfUeNgapId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete UE context from database: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) allocateAmfUeNgapId() int64 {
@@ -131,6 +173,20 @@ func (c *AMFContext) DeleteEventSubscription(subscriptionId string) {
 func (c *AMFContext) AddN1N2Subscription(subscription *N1N2Subscription) {
 	c.N1N2Subscriptions.Store(subscription.SubscriptionId, subscription)
 	logger.CtxLog.Infof("N1N2 subscription stored: %s", subscription.SubscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.SaveN1N2Subscription(
+			subscription.SubscriptionId,
+			subscription.UeContextId,
+			subscription.N1MessageClass,
+			subscription.N1NotifyCallbackUri,
+			subscription.N2InformationClass,
+			subscription.N2NotifyCallbackUri,
+			subscription.NfId,
+		); err != nil {
+			logger.CtxLog.Errorf("Failed to persist N1N2 subscription: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) GetN1N2Subscription(subscriptionId string) (*N1N2Subscription, bool) {
@@ -144,6 +200,12 @@ func (c *AMFContext) GetN1N2Subscription(subscriptionId string) (*N1N2Subscripti
 func (c *AMFContext) DeleteN1N2Subscription(subscriptionId string) {
 	c.N1N2Subscriptions.Delete(subscriptionId)
 	logger.CtxLog.Infof("N1N2 subscription deleted: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.DeleteN1N2Subscription(subscriptionId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete N1N2 subscription from database: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) StoreAMFStatusSubscription(subscriptionId string, subscription interface{}) {
@@ -315,5 +377,57 @@ func (c *AMFContext) DeregisterFromNRF() error {
 		return fmt.Errorf("failed to deregister from NRF: %w", err)
 	}
 
+	return nil
+}
+
+func (c *AMFContext) InitializeDatabase(dbClient DatabaseClient, ueRepo UERepository, subscriptionRepo SubscriptionRepository) {
+	c.DbClient = dbClient
+	c.UeRepo = ueRepo
+	c.SubscriptionRepo = subscriptionRepo
+	c.persistenceEnabled = true
+	logger.CtxLog.Info("Database persistence enabled")
+}
+
+func (c *AMFContext) RestoreFromDatabase() error {
+	if !c.persistenceEnabled || c.UeRepo == nil {
+		logger.CtxLog.Info("Database persistence not enabled, skipping restoration")
+		return nil
+	}
+
+	ueContexts, err := c.UeRepo.FindAll()
+	if err != nil {
+		return fmt.Errorf("failed to restore UE contexts: %w", err)
+	}
+
+	for _, ue := range ueContexts {
+		c.UeContexts.Store(ue.AmfUeNgapId, ue)
+	}
+
+	logger.CtxLog.Infof("Restored %d UE contexts from database", len(ueContexts))
+	return nil
+}
+
+func (c *AMFContext) PersistUEContext(ue *UEContext) error {
+	if !c.persistenceEnabled || c.UeRepo == nil {
+		return nil
+	}
+
+	if err := c.UeRepo.Save(ue); err != nil {
+		return fmt.Errorf("failed to persist UE context: %w", err)
+	}
+
+	return nil
+}
+
+func (c *AMFContext) Shutdown() error {
+	c.StopHeartbeat()
+
+	if c.DbClient != nil {
+		if err := c.DbClient.Disconnect(); err != nil {
+			return fmt.Errorf("failed to disconnect from database: %w", err)
+		}
+	}
+
+	logger.CtxLog.Info("AMF Context shutdown complete")
 	return nil
 }

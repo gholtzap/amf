@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/gavin/amf/internal/context"
+	"github.com/gavin/amf/internal/database"
 	"github.com/gavin/amf/internal/logger"
 	"github.com/gavin/amf/internal/nas"
 	"github.com/gavin/amf/internal/ngap"
@@ -46,6 +47,26 @@ func main() {
 		config.Configuration.AusfUri,
 		config.Configuration.SmfUri,
 	)
+
+	if config.Configuration.DatabaseUri != "" && config.Configuration.DatabaseName != "" {
+		dbClient, err := database.NewMongoDBClient(config.Configuration.DatabaseUri, config.Configuration.DatabaseName)
+		if err != nil {
+			logger.MainLog.Errorf("Failed to connect to MongoDB: %v", err)
+			logger.MainLog.Warn("Continuing without database persistence")
+		} else {
+			ueRepo := database.NewUERepository(dbClient)
+			subscriptionRepo := database.NewSubscriptionRepository(dbClient)
+
+			amfContext.InitializeDatabase(dbClient, ueRepo, subscriptionRepo)
+			logger.MainLog.Info("Database persistence enabled")
+
+			if err := amfContext.RestoreFromDatabase(); err != nil {
+				logger.MainLog.Errorf("Failed to restore data from database: %v", err)
+			}
+		}
+	} else {
+		logger.MainLog.Info("Database not configured, running in memory-only mode")
+	}
 
 	for _, servedGuami := range config.Configuration.ServedGuamiList {
 		guami := context.Guami{
@@ -150,6 +171,10 @@ func main() {
 		logger.MainLog.Errorf("Failed to deregister from NRF: %v", err)
 	} else {
 		logger.MainLog.Info("Successfully deregistered from NRF")
+	}
+
+	if err := amfContext.Shutdown(); err != nil {
+		logger.MainLog.Errorf("Failed to shutdown AMF context: %v", err)
 	}
 
 	fmt.Println("AMF stopped")

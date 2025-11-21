@@ -42,6 +42,8 @@ type Configuration struct {
 	UdmUri                          string        `json:"udmUri"`
 	AusfUri                         string        `json:"ausfUri"`
 	SmfUri                          string        `json:"smfUri"`
+	DatabaseUri                     string        `json:"databaseUri"`
+	DatabaseName                    string        `json:"databaseName"`
 }
 
 type Sbi struct {
@@ -117,6 +119,20 @@ func InitConfigFactory(configPath string) error {
 	config := &Config{}
 	if err := json.Unmarshal(data, config); err != nil {
 		return err
+	}
+
+	if config.Configuration.DatabaseUri == "" {
+		if envUri := os.Getenv("MONGODB_URI"); envUri != "" {
+			config.Configuration.DatabaseUri = envUri
+			logger.CfgLog.Info("Using MongoDB URI from MONGODB_URI environment variable")
+		}
+	}
+
+	if config.Configuration.DatabaseName == "" {
+		if envDb := os.Getenv("MONGODB_DB_NAME"); envDb != "" {
+			config.Configuration.DatabaseName = envDb
+			logger.CfgLog.Info("Using MongoDB database name from MONGODB_DB_NAME environment variable")
+		}
 	}
 
 	amfConfig = config

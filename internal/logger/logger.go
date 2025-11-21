@@ -12,7 +12,6 @@ type Logger struct {
 }
 
 var (
-	// Component loggers
 	MainLog    *Logger
 	CfgLog     *Logger
 	NasLog     *Logger
@@ -22,6 +21,8 @@ var (
 	ConsumerLog *Logger
 	SbiLog     *Logger
 	UtilLog    *Logger
+	InitLog    *Logger
+	DbLog      *Logger
 )
 
 func init() {
@@ -34,6 +35,8 @@ func init() {
 	ConsumerLog = newLogger("AMF", "Consumer")
 	SbiLog = newLogger("AMF", "SBI")
 	UtilLog = newLogger("AMF", "Util")
+	InitLog = newLogger("AMF", "Init")
+	DbLog = newLogger("AMF", "Database")
 }
 
 // newLogger creates a new logger with prefix
