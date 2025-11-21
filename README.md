@@ -10,6 +10,7 @@
 - PDU Session Resource Setup Request/Response
 - UE Context Release Request
 - RAN context management
+- Paging
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -101,7 +102,6 @@
 ## NOT IMPLEMENTED FEATURES
 
 ### NGAP Procedures
-- Paging
 - Handover procedures (Handover Request/Notify/Command/Required)
 - Path Switch Request
 - N2 Handover Resource Allocation

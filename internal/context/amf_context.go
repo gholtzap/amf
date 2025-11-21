@@ -477,6 +477,25 @@ func (c *AMFContext) PersistUEContext(ue *UEContext) error {
 	return nil
 }
 
+func (c *AMFContext) GetRANContextsByTAI(tai Tai) []*RANContext {
+	ranList := make([]*RANContext, 0)
+
+	c.RanContexts.Range(func(key, value interface{}) bool {
+		ran := value.(*RANContext)
+		for _, supportedTAI := range ran.SupportedTAList {
+			if supportedTAI.Tai.PlmnId.Mcc == tai.PlmnId.Mcc &&
+			   supportedTAI.Tai.PlmnId.Mnc == tai.PlmnId.Mnc &&
+			   supportedTAI.Tai.Tac == tai.Tac {
+				ranList = append(ranList, ran)
+				break
+			}
+		}
+		return true
+	})
+
+	return ranList
+}
+
 func (c *AMFContext) Shutdown() error {
 	c.StopHeartbeat()
 

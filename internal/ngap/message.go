@@ -14,7 +14,7 @@ const (
 	ProcedureCodePDUSessionResourceSetup   = 29
 	ProcedureCodeUEContextRelease          = 41
 	ProcedureCodeNGReset                   = 20
-	ProcedureCodePaging                    = 21
+	ProcedureCodePaging                    = 8
 	ProcedureCodeHandoverPreparation       = 0
 	ProcedureCodeHandoverResourceAllocation = 1
 )
@@ -62,6 +62,10 @@ const (
 	ProtocolIEIDAllowedNSSAI                  = 0
 	ProtocolIEIDUESecurityCapabilities        = 119
 	ProtocolIEIDSecurityKey                   = 94
+	ProtocolIEIDUEPagingIdentity              = 114
+	ProtocolIEIDTAIListForPaging              = 105
+	ProtocolIEIDPagingDRX                     = 70
+	ProtocolIEIDPagingPriority                = 71
 )
 
 type GlobalRANNodeID struct {
@@ -118,6 +122,30 @@ type SNSSAI struct {
 	SST int
 	SD  []byte
 }
+
+type UEPagingIdentity struct {
+	FiveGSTMSI    *FiveGSTMSI
+	IMSIPagingTAI *TAI
+}
+
+type FiveGSTMSI struct {
+	AMFSetID    uint16
+	AMFPointer  uint8
+	FiveGTMSI   uint32
+}
+
+type TAIListForPaging struct {
+	TAIItems []TAI
+}
+
+type PagingDRX int
+
+const (
+	PagingDRXv32  PagingDRX = 32
+	PagingDRXv64  PagingDRX = 64
+	PagingDRXv128 PagingDRX = 128
+	PagingDRXv256 PagingDRX = 256
+)
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

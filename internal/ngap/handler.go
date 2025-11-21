@@ -392,3 +392,117 @@ func (h *Handler) SendPDUSessionResourceSetupRequest(ranUeNgapId, amfUeNgapId in
 
 	return h.server.SendMessage(ue.RanContext.Conn, pdu)
 }
+
+func (h *Handler) SendPaging(ue *context.UEContext) error {
+	logger.NgapLog.Info("Sending Paging message")
+
+	if ue.Guti == nil {
+		return fmt.Errorf("UE has no GUTI allocated, cannot page")
+	}
+
+	if ue.CmState == context.CmConnected {
+		logger.NgapLog.Warn("UE is in CM-CONNECTED state, paging not needed")
+		return nil
+	}
+
+	fiveGSTMSI := EncodeFiveGSTMSI(ue.Guti)
+
+	taiList := &TAIListForPaging{
+		TAIItems: []TAI{
+			{
+				PLMNIdentity: EncodePlmnIdentity(ue.Tai.PlmnId),
+				TAC:          EncodeTAC(ue.Tai.Tac),
+			},
+		},
+	}
+
+	ranContexts := h.amfContext.GetRANContextsByTAI(ue.Tai)
+	if len(ranContexts) == 0 {
+		return fmt.Errorf("no RAN contexts found for TAI: %+v", ue.Tai)
+	}
+
+	logger.NgapLog.Infof("Paging UE in %d RAN(s)", len(ranContexts))
+
+	for _, ran := range ranContexts {
+		pdu := &NGAPPDU{
+			Type:          PDUTypeInitiatingMessage,
+			ProcedureCode: ProcedureCodePaging,
+			Criticality:   CriticalityIgnore,
+			IEs: []ProtocolIE{
+				{
+					Id:          ProtocolIEIDUEPagingIdentity,
+					Criticality: CriticalityIgnore,
+					Value:       fiveGSTMSI,
+				},
+				{
+					Id:          ProtocolIEIDTAIListForPaging,
+					Criticality: CriticalityIgnore,
+					Value:       EncodeTAIListForPaging(taiList),
+				},
+			},
+		}
+
+		if ran.DefaultPagingDrx != "" {
+			pdu.IEs = append(pdu.IEs, ProtocolIE{
+				Id:          ProtocolIEIDPagingDRX,
+				Criticality: CriticalityIgnore,
+				Value:       int64(32),
+			})
+		}
+
+		if err := h.server.SendMessage(ran.Conn, pdu); err != nil {
+			logger.NgapLog.Errorf("Failed to send paging to RAN %s: %v", ran.RanNodeName, err)
+			continue
+		}
+
+		logger.NgapLog.Infof("Paging sent to RAN: %s for UE with 5G-S-TMSI", ran.RanNodeName)
+	}
+
+	return nil
+}
+
+func EncodeFiveGSTMSI(guti *context.Guti) []byte {
+	fiveGSTMSI := make([]byte, 6)
+
+	amfSetId := uint16(0)
+	amfPointer := uint8(0)
+
+	fiveGSTMSI[0] = byte(amfSetId >> 8)
+	fiveGSTMSI[1] = byte(amfSetId)
+	fiveGSTMSI[2] = amfPointer
+
+	fiveGSTMSI[3] = byte(guti.Tmsi >> 24)
+	fiveGSTMSI[4] = byte(guti.Tmsi >> 16)
+	fiveGSTMSI[5] = byte(guti.Tmsi >> 8)
+
+	return fiveGSTMSI
+}
+
+func EncodePlmnIdentity(plmnId context.PlmnId) []byte {
+	plmn := make([]byte, 3)
+	if len(plmnId.Mcc) >= 3 {
+		plmn[0] = plmnId.Mcc[0]
+		plmn[1] = plmnId.Mcc[1]
+		plmn[2] = plmnId.Mcc[2]
+	}
+	return plmn
+}
+
+func EncodeTAC(tac string) []byte {
+	tacBytes := make([]byte, 3)
+	if len(tac) >= 3 {
+		tacBytes[0] = tac[0]
+		tacBytes[1] = tac[1]
+		tacBytes[2] = tac[2]
+	}
+	return tacBytes
+}
+
+func EncodeTAIListForPaging(taiList *TAIListForPaging) []byte {
+	result := make([]byte, 0)
+	for _, tai := range taiList.TAIItems {
+		result = append(result, tai.PLMNIdentity...)
+		result = append(result, tai.TAC...)
+	}
+	return result
+}
