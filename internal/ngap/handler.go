@@ -506,3 +506,122 @@ func EncodeTAIListForPaging(taiList *TAIListForPaging) []byte {
 	}
 	return result
 }
+
+func (h *Handler) HandleNGReset(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling NG Reset")
+
+	var resetType ResetType = ResetTypeNGInterface
+	var ueList []UEAssociatedLogicalNGConnectionItem
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDResetType:
+			if data, ok := ie.Value.([]byte); ok && len(data) > 0 {
+				if data[0] == 0x01 {
+					resetType = ResetTypePartOfNGInterface
+				}
+			}
+		case ProtocolIEIDUEAssociatedLogicalNGConnectionList:
+			if data, ok := ie.Value.([]byte); ok {
+				ueList = parseUEAssociatedList(data)
+			}
+		}
+	}
+
+	if resetType == ResetTypeNGInterface {
+		logger.NgapLog.Info("Resetting all UE-associated logical NG connections")
+
+		ranContext.RangeUEs(func(ranUeNgapId int64, ue *context.UEContext) bool {
+			logger.NgapLog.Infof("Releasing UE context for AMF UE NGAP ID=%d", ue.AmfUeNgapId)
+			ue.CmState = context.CmIdle
+			h.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+			return true
+		})
+
+		ranContext.ClearAllUEs()
+	} else {
+		logger.NgapLog.Infof("Resetting %d UE-associated logical NG connections", len(ueList))
+
+		for _, item := range ueList {
+			if item.AMFUENGAPID != nil {
+				amfUeNgapId := *item.AMFUENGAPID
+				ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+				if ok {
+					logger.NgapLog.Infof("Releasing UE context for AMF UE NGAP ID=%d", amfUeNgapId)
+					ue.CmState = context.CmIdle
+					h.amfContext.DeleteUEContext(amfUeNgapId)
+				}
+			}
+		}
+	}
+
+	logger.NgapLog.Info("NG Reset completed, sending NG Reset Acknowledge")
+
+	return h.SendNGResetAcknowledge(ranContext, resetType, ueList)
+}
+
+func (h *Handler) SendNGResetAcknowledge(ranContext *context.RANContext, resetType ResetType, ueList []UEAssociatedLogicalNGConnectionItem) error {
+	logger.NgapLog.Info("Sending NG Reset Acknowledge")
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeSuccessfulOutcome,
+		ProcedureCode: ProcedureCodeNGReset,
+		Criticality:   CriticalityReject,
+		IEs:           []ProtocolIE{},
+	}
+
+	if resetType == ResetTypePartOfNGInterface && len(ueList) > 0 {
+		ueListData := encodeUEAssociatedList(ueList)
+		pdu.IEs = append(pdu.IEs, ProtocolIE{
+			Id:          ProtocolIEIDUEAssociatedLogicalNGConnectionList,
+			Criticality: CriticalityIgnore,
+			Value:       ueListData,
+		})
+	}
+
+	logger.NgapLog.Info("NG Reset Acknowledge sent successfully")
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}
+
+func parseUEAssociatedList(data []byte) []UEAssociatedLogicalNGConnectionItem {
+	items := []UEAssociatedLogicalNGConnectionItem{}
+
+	offset := 0
+	for offset+8 <= len(data) {
+		item := UEAssociatedLogicalNGConnectionItem{}
+
+		if offset+4 <= len(data) {
+			amfUeNgapId := int64(data[offset])<<24 | int64(data[offset+1])<<16 | int64(data[offset+2])<<8 | int64(data[offset+3])
+			item.AMFUENGAPID = &amfUeNgapId
+			offset += 4
+		}
+
+		if offset+4 <= len(data) {
+			ranUeNgapId := int64(data[offset])<<24 | int64(data[offset+1])<<16 | int64(data[offset+2])<<8 | int64(data[offset+3])
+			item.RANUENGAPID = &ranUeNgapId
+			offset += 4
+		}
+
+		items = append(items, item)
+	}
+
+	return items
+}
+
+func encodeUEAssociatedList(items []UEAssociatedLogicalNGConnectionItem) []byte {
+	data := make([]byte, 0)
+
+	for _, item := range items {
+		if item.AMFUENGAPID != nil {
+			amfId := *item.AMFUENGAPID
+			data = append(data, byte(amfId>>24), byte(amfId>>16), byte(amfId>>8), byte(amfId))
+		}
+		if item.RANUENGAPID != nil {
+			ranId := *item.RANUENGAPID
+			data = append(data, byte(ranId>>24), byte(ranId>>16), byte(ranId>>8), byte(ranId))
+		}
+	}
+
+	return data
+}

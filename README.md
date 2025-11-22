@@ -11,6 +11,7 @@
 - UE Context Release Request
 - RAN context management
 - Paging
+- NG Reset
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -118,7 +119,6 @@
 - Trace Start/Deactivation
 - Cell Traffic Trace
 - Deactivate Trace
-- NG Reset
 
 ### NAS MM Procedures
 

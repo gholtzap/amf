@@ -58,3 +58,15 @@ func (ran *RANContext) GetUE(ranUeNgapId int64) (*UEContext, bool) {
 	}
 	return value.(*UEContext), true
 }
+
+func (ran *RANContext) RangeUEs(f func(ranUeNgapId int64, ue *UEContext) bool) {
+	ran.UeContexts.Range(func(key, value interface{}) bool {
+		ranUeNgapId := key.(int64)
+		ue := value.(*UEContext)
+		return f(ranUeNgapId, ue)
+	})
+}
+
+func (ran *RANContext) ClearAllUEs() {
+	ran.UeContexts = sync.Map{}
+}

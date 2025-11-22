@@ -66,6 +66,9 @@ const (
 	ProtocolIEIDTAIListForPaging              = 105
 	ProtocolIEIDPagingDRX                     = 70
 	ProtocolIEIDPagingPriority                = 71
+	ProtocolIEIDResetType                     = 40
+	ProtocolIEIDUEAssociatedLogicalNGConnectionList = 114
+	ProtocolIEIDCause                         = 15
 )
 
 type GlobalRANNodeID struct {
@@ -146,6 +149,23 @@ const (
 	PagingDRXv128 PagingDRX = 128
 	PagingDRXv256 PagingDRX = 256
 )
+
+type ResetType int
+
+const (
+	ResetTypeNGInterface ResetType = 0
+	ResetTypePartOfNGInterface ResetType = 1
+)
+
+type UEAssociatedLogicalNGConnectionItem struct {
+	AMFUENGAPID *int64
+	RANUENGAPID *int64
+}
+
+type Cause struct {
+	CauseGroup int
+	CauseValue int
+}
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

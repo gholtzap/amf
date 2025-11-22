@@ -107,6 +107,8 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return s.handler.HandlePDUSessionResourceSetupResponse(ranContext, pdu)
 	case ProcedureCodeUEContextRelease:
 		return s.handler.HandleUEContextReleaseRequest(ranContext, pdu)
+	case ProcedureCodeNGReset:
+		return s.handler.HandleNGReset(ranContext, pdu)
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil
