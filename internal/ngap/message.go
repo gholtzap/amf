@@ -21,6 +21,7 @@ const (
 	ProcedureCodeOverloadStart             = 24
 	ProcedureCodeOverloadStop              = 25
 	ProcedureCodeAMFConfigurationUpdate    = 39
+	ProcedureCodeRANConfigurationUpdate    = 40
 )
 
 const (

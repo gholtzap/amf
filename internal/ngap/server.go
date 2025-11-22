@@ -123,6 +123,8 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		}
 		logger.NgapLog.Warnf("Unexpected PDU type for AMF Configuration Update: %s", pdu.Type)
 		return nil
+	case ProcedureCodeRANConfigurationUpdate:
+		return s.handler.HandleRANConfigurationUpdate(ranContext, pdu)
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil

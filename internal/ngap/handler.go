@@ -900,3 +900,109 @@ func (h *Handler) HandleAMFConfigurationUpdateFailure(ranContext *context.RANCon
 
 	return nil
 }
+
+func (h *Handler) HandleRANConfigurationUpdate(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling RAN Configuration Update")
+
+	var ranNodeName *string
+	var globalRANNodeID *GlobalRANNodeID
+	var supportedTAList []SupportedTAItem
+	var pagingDRX *int
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDRANNodeName:
+			if data, ok := ie.Value.([]byte); ok {
+				name := string(data)
+				ranNodeName = &name
+			}
+		case ProtocolIEIDGlobalRANNodeID:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 3 {
+				globalRANNodeID = &GlobalRANNodeID{
+					PLMNIdentity: data[:3],
+					GNBID:        data[3:],
+				}
+			}
+		case ProtocolIEIDSupportedTAList:
+			if data, ok := ie.Value.([]byte); ok {
+				if len(data) >= 6 {
+					supportedTAList = []SupportedTAItem{
+						{
+							TAC: data[:3],
+							BroadcastPLMNList: []BroadcastPLMNItem{
+								{
+									PLMNIdentity: data[3:6],
+								},
+							},
+						},
+					}
+				}
+			}
+		case ProtocolIEIDDefaultPagingDRX:
+			if data, ok := ie.Value.([]byte); ok && len(data) > 0 {
+				drx := int(data[0])
+				pagingDRX = &drx
+			}
+		}
+	}
+
+	if ranNodeName != nil {
+		ranContext.RanNodeName = *ranNodeName
+		logger.NgapLog.Infof("Updated RAN Node Name: %s", *ranNodeName)
+	}
+
+	if globalRANNodeID != nil {
+		ranContext.GlobalRanNodeId = &context.GlobalRanNodeId{
+			PlmnId: context.PlmnId{
+				Mcc: string(globalRANNodeID.PLMNIdentity[:3]),
+				Mnc: string(globalRANNodeID.PLMNIdentity[3:]),
+			},
+			GnbId: string(globalRANNodeID.GNBID),
+		}
+		logger.NgapLog.Info("Updated Global RAN Node ID")
+	}
+
+	if len(supportedTAList) > 0 {
+		ranContext.SupportedTAList = []context.SupportedTAI{}
+		for _, tai := range supportedTAList {
+			ranContext.SupportedTAList = append(ranContext.SupportedTAList, context.SupportedTAI{
+				Tai: context.Tai{
+					PlmnId: context.PlmnId{
+						Mcc: string(tai.TAC[:3]),
+						Mnc: "01",
+					},
+					Tac: string(tai.TAC),
+				},
+			})
+		}
+		logger.NgapLog.Infof("Updated Supported TA List with %d entries", len(supportedTAList))
+	}
+
+	if pagingDRX != nil {
+		ranContext.DefaultPagingDrx = fmt.Sprintf("%d", *pagingDRX)
+		logger.NgapLog.Infof("Updated Default Paging DRX: %d", *pagingDRX)
+	}
+
+	logger.NgapLog.Infof("RAN Configuration Update completed for RAN: %s", ranContext.RanNodeName)
+
+	return h.SendRANConfigurationUpdateAcknowledge(ranContext)
+}
+
+func (h *Handler) SendRANConfigurationUpdateAcknowledge(ranContext *context.RANContext) error {
+	logger.NgapLog.Info("Sending RAN Configuration Update Acknowledge")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeSuccessfulOutcome,
+		ProcedureCode: ProcedureCodeRANConfigurationUpdate,
+		Criticality:   CriticalityReject,
+		IEs:           []ProtocolIE{},
+	}
+
+	logger.NgapLog.Infof("RAN Configuration Update Acknowledge sent to RAN %s", ranContext.RanNodeName)
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}

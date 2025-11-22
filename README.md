@@ -15,6 +15,7 @@
 - Error Indication handling
 - Overload Start/Stop
 - AMF Configuration Update
+- RAN Configuration Update
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -111,7 +112,6 @@
 - Handover procedures (Handover Request/Notify/Command/Required)
 - Path Switch Request
 - N2 Handover Resource Allocation
-- RAN Configuration Update
 - Write-Replace Warning
 - UE Radio Capability Management
 - Location Reporting
