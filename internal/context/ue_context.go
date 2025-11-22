@@ -169,7 +169,9 @@ type QosParameters struct {
 
 // UeCapability represents UE capabilities
 type UeCapability struct {
-	RatList []string // e.g., ["NR", "EUTRA"]
+	RatList                    []string
+	UeRadioCapability          []byte
+	UeRadioCapabilityForPaging []byte
 }
 
 // SubscriptionData represents UE subscription data

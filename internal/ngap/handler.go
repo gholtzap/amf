@@ -1006,3 +1006,50 @@ func (h *Handler) SendRANConfigurationUpdateAcknowledge(ranContext *context.RANC
 
 	return h.server.SendMessage(ranContext.Conn, pdu)
 }
+
+func (h *Handler) HandleUERadioCapabilityInfoIndication(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling UE Radio Capability Info Indication")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var ueRadioCapability []byte
+	var ueRadioCapabilityForPaging []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDUERadioCapability:
+			if data, ok := ie.Value.([]byte); ok {
+				ueRadioCapability = data
+			}
+		case ProtocolIEIDUERadioCapabilityForPaging:
+			if data, ok := ie.Value.([]byte); ok {
+				ueRadioCapabilityForPaging = data
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	if ue.UeCapability == nil {
+		ue.UeCapability = &context.UeCapability{}
+	}
+
+	ue.UeCapability.UeRadioCapability = ueRadioCapability
+	ue.UeCapability.UeRadioCapabilityForPaging = ueRadioCapabilityForPaging
+
+	logger.NgapLog.Infof("UE Radio Capability Info received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, Capability length=%d, Paging Capability length=%d",
+		amfUeNgapId, ranUeNgapId, len(ueRadioCapability), len(ueRadioCapabilityForPaging))
+
+	return nil
+}

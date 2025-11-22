@@ -16,6 +16,7 @@
 - Overload Start/Stop
 - AMF Configuration Update
 - RAN Configuration Update
+- UE Radio Capability Management
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -113,7 +114,6 @@
 - Path Switch Request
 - N2 Handover Resource Allocation
 - Write-Replace Warning
-- UE Radio Capability Management
 - Location Reporting
 - UE TNLA Binding Release
 - RAN CP Relocation Indication

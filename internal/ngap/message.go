@@ -22,6 +22,7 @@ const (
 	ProcedureCodeOverloadStop              = 25
 	ProcedureCodeAMFConfigurationUpdate    = 39
 	ProcedureCodeRANConfigurationUpdate    = 40
+	ProcedureCodeUERadioCapabilityInfoIndication = 43
 )
 
 const (
@@ -86,6 +87,8 @@ const (
 	ProtocolIEIDAMFTNLAssociationToAddList    = 5
 	ProtocolIEIDAMFTNLAssociationToRemoveList = 6
 	ProtocolIEIDAMFTNLAssociationToUpdateList = 7
+	ProtocolIEIDUERadioCapability             = 118
+	ProtocolIEIDUERadioCapabilityForPaging    = 117
 )
 
 type GlobalRANNodeID struct {
