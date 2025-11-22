@@ -596,6 +596,8 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 		return h.HandlePDUSessionModificationRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	case MsgTypePDUSessionReleaseRequest:
 		return h.HandlePDUSessionReleaseRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
+	case MsgTypeFiveGSMStatus:
+		return h.HandleFiveGSMStatus(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	default:
 		logger.NasLog.Warnf("Unsupported SM message type: 0x%02x", smMsgType)
 		return nil
@@ -1038,6 +1040,30 @@ func (h *Handler) HandleDeregistrationAccept(ue *context.UEContext, payload []by
 
 	h.amfContext.DeleteUEContext(ue.AmfUeNgapId)
 	logger.NasLog.Infof("UE context deleted for AMF UE NGAP ID: %d", ue.AmfUeNgapId)
+
+	return nil
+}
+
+func (h *Handler) HandleFiveGSMStatus(ue *context.UEContext, pduSessionID uint8, smMsg []byte) error {
+	logger.NasLog.Infof("Handle 5GSM Status for UE SUPI: %s, PDU Session ID: %d", ue.Supi, pduSessionID)
+
+	if len(smMsg) < 3 {
+		return fmt.Errorf("SM message too short")
+	}
+
+	smPayload := smMsg[3:]
+	statusMsg, err := DecodeFiveGSMStatus(smPayload)
+	if err != nil {
+		return fmt.Errorf("failed to decode 5GSM status: %v", err)
+	}
+
+	logger.NasLog.Infof("Received 5GSM Status from UE %s for PDU Session %d with cause: 0x%02x",
+		ue.Supi, pduSessionID, statusMsg.Cause5GSM)
+
+	_, ok := ue.GetPduSession(int32(pduSessionID))
+	if !ok {
+		logger.NasLog.Warnf("PDU Session %d not found for UE %s", pduSessionID, ue.Supi)
+	}
 
 	return nil
 }

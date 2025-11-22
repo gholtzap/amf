@@ -100,6 +100,7 @@ const (
 	MsgTypePDUSessionReleaseRequest       = 0xd1
 	MsgTypePDUSessionReleaseCommand       = 0xd2
 	MsgTypePDUSessionReleaseComplete      = 0xd3
+	MsgTypeFiveGSMStatus                  = 0x64
 )
 
 const (

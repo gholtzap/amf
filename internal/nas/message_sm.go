@@ -97,6 +97,10 @@ type PDUSessionReleaseCompleteMsg struct {
 	ExtendedProtocolConfigurationOptions []byte
 }
 
+type FiveGSMStatusMsg struct {
+	Cause5GSM uint8
+}
+
 func DecodeULNASTransport(payload []byte) (*ULNASTransportMsg, error) {
 	if len(payload) < 2 {
 		return nil, fmt.Errorf("UL NAS transport too short")
@@ -666,5 +670,23 @@ func EncodePDUSessionReleaseComplete(msg *PDUSessionReleaseCompleteMsg) []byte {
 		payload = append(payload, msg.ExtendedProtocolConfigurationOptions...)
 	}
 
+	return payload
+}
+
+func DecodeFiveGSMStatus(payload []byte) (*FiveGSMStatusMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("5GSM status message too short")
+	}
+
+	msg := &FiveGSMStatusMsg{
+		Cause5GSM: payload[0],
+	}
+
+	return msg, nil
+}
+
+func EncodeFiveGSMStatus(msg *FiveGSMStatusMsg) []byte {
+	payload := make([]byte, 0)
+	payload = append(payload, msg.Cause5GSM)
 	return payload
 }
