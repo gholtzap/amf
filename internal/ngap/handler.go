@@ -691,10 +691,8 @@ func (h *Handler) HandleOverloadStart(ranContext *context.RANContext, pdu *NGAPP
 		}
 	}
 
-	ranContext.mu.Lock()
 	ranContext.IsOverloaded = true
 	ranContext.TrafficLoadReductionIndication = trafficLoadReduction
-	ranContext.mu.Unlock()
 
 	logger.NgapLog.Infof("RAN %s entered overload state - Response: %d, Traffic Load Reduction: %d%%",
 		ranContext.RanNodeName, overloadResponse, trafficLoadReduction)
@@ -705,10 +703,8 @@ func (h *Handler) HandleOverloadStart(ranContext *context.RANContext, pdu *NGAPP
 func (h *Handler) HandleOverloadStop(ranContext *context.RANContext, pdu *NGAPPDU) error {
 	logger.NgapLog.Info("Handling Overload Stop")
 
-	ranContext.mu.Lock()
 	ranContext.IsOverloaded = false
 	ranContext.TrafficLoadReductionIndication = 0
-	ranContext.mu.Unlock()
 
 	logger.NgapLog.Infof("RAN %s exited overload state", ranContext.RanNodeName)
 
@@ -745,10 +741,8 @@ func (h *Handler) SendOverloadStart(ranContext *context.RANContext, overloadActi
 		IEs:           ies,
 	}
 
-	h.amfContext.mu.Lock()
 	h.amfContext.IsOverloaded = true
 	h.amfContext.OverloadAction = int(overloadAction)
-	h.amfContext.mu.Unlock()
 
 	logger.NgapLog.Infof("Sending Overload Start to RAN %s - Action: %d, Traffic Load Reduction: %d%%",
 		ranContext.RanNodeName, overloadAction, trafficLoadReduction)
@@ -770,12 +764,139 @@ func (h *Handler) SendOverloadStop(ranContext *context.RANContext) error {
 		IEs:           []ProtocolIE{},
 	}
 
-	h.amfContext.mu.Lock()
 	h.amfContext.IsOverloaded = false
 	h.amfContext.OverloadAction = 0
-	h.amfContext.mu.Unlock()
 
 	logger.NgapLog.Infof("Sending Overload Stop to RAN %s", ranContext.RanNodeName)
 
 	return h.server.SendMessage(ranContext.Conn, pdu)
+}
+
+func (h *Handler) SendAMFConfigurationUpdate(ranContext *context.RANContext, amfName string) error {
+	logger.NgapLog.Info("Sending AMF Configuration Update")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	ies := []ProtocolIE{}
+
+	if amfName != "" {
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDAMFName,
+			Criticality: CriticalityReject,
+			Value:       []byte(amfName),
+		})
+	}
+
+	if len(h.amfContext.ServedGuami) > 0 {
+		var guamiData []byte
+		for _, guami := range h.amfContext.ServedGuami {
+			guamiData = append(guamiData, []byte(guami.PlmnId.Mcc)...)
+			guamiData = append(guamiData, []byte(guami.PlmnId.Mnc)...)
+			guamiData = append(guamiData, []byte(guami.AmfId)...)
+		}
+		if len(guamiData) > 0 {
+			ies = append(ies, ProtocolIE{
+				Id:          ProtocolIEIDServedGUAMIList,
+				Criticality: CriticalityReject,
+				Value:       guamiData,
+			})
+		}
+	}
+
+	relativeCapacity := byte(255)
+	ies = append(ies, ProtocolIE{
+		Id:          ProtocolIEIDRelativeAMFCapacity,
+		Criticality: CriticalityIgnore,
+		Value:       []byte{relativeCapacity},
+	})
+
+	if len(h.amfContext.PlmnSupportList) > 0 {
+		var plmnData []byte
+		for _, plmnSupport := range h.amfContext.PlmnSupportList {
+			plmnData = append(plmnData, []byte(plmnSupport.PlmnId.Mcc)...)
+			plmnData = append(plmnData, []byte(plmnSupport.PlmnId.Mnc)...)
+			for _, snssai := range plmnSupport.SNssaiList {
+				plmnData = append(plmnData, byte(snssai.Sst))
+				plmnData = append(plmnData, []byte(snssai.Sd)...)
+			}
+		}
+		if len(plmnData) > 0 {
+			ies = append(ies, ProtocolIE{
+				Id:          ProtocolIEIDPLMNSupportList,
+				Criticality: CriticalityReject,
+				Value:       plmnData,
+			})
+		}
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeAMFConfigurationUpdate,
+		Criticality:   CriticalityReject,
+		IEs:           ies,
+	}
+
+	logger.NgapLog.Infof("Sending AMF Configuration Update to RAN %s", ranContext.RanNodeName)
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}
+
+func (h *Handler) HandleAMFConfigurationUpdateAcknowledge(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling AMF Configuration Update Acknowledge")
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFTNLAssociationToAddList:
+		case ProtocolIEIDAMFTNLAssociationToRemoveList:
+		case ProtocolIEIDAMFTNLAssociationToUpdateList:
+		case ProtocolIEIDCriticalityDiagnostics:
+		}
+	}
+
+	logger.NgapLog.Infof("AMF Configuration Update acknowledged by RAN %s", ranContext.RanNodeName)
+
+	return nil
+}
+
+func (h *Handler) HandleAMFConfigurationUpdateFailure(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling AMF Configuration Update Failure")
+
+	var cause *Cause
+	var timeToWait int
+	var criticalityDiagnostics []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDCause:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 2 {
+				cause = &Cause{
+					CauseGroup: int(data[0]),
+					CauseValue: int(data[1]),
+				}
+			}
+		case ProtocolIEIDCriticalityDiagnostics:
+			if data, ok := ie.Value.([]byte); ok {
+				criticalityDiagnostics = data
+			}
+		}
+	}
+
+	if cause != nil {
+		logger.NgapLog.Errorf("AMF Configuration Update failed for RAN %s - Cause Group: %d, Cause Value: %d",
+			ranContext.RanNodeName, cause.CauseGroup, cause.CauseValue)
+	} else {
+		logger.NgapLog.Errorf("AMF Configuration Update failed for RAN %s - Unknown cause", ranContext.RanNodeName)
+	}
+
+	if timeToWait > 0 {
+		logger.NgapLog.Infof("Time to wait before retry: %d seconds", timeToWait)
+	}
+
+	if len(criticalityDiagnostics) > 0 {
+		logger.NgapLog.Debugf("Criticality Diagnostics: %v", criticalityDiagnostics)
+	}
+
+	return nil
 }

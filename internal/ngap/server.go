@@ -115,6 +115,14 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return s.handler.HandleOverloadStart(ranContext, pdu)
 	case ProcedureCodeOverloadStop:
 		return s.handler.HandleOverloadStop(ranContext, pdu)
+	case ProcedureCodeAMFConfigurationUpdate:
+		if pdu.Type == PDUTypeSuccessfulOutcome {
+			return s.handler.HandleAMFConfigurationUpdateAcknowledge(ranContext, pdu)
+		} else if pdu.Type == PDUTypeUnsuccessfulOutcome {
+			return s.handler.HandleAMFConfigurationUpdateFailure(ranContext, pdu)
+		}
+		logger.NgapLog.Warnf("Unexpected PDU type for AMF Configuration Update: %s", pdu.Type)
+		return nil
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil

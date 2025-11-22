@@ -14,6 +14,7 @@
 - NG Reset
 - Error Indication handling
 - Overload Start/Stop
+- AMF Configuration Update
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -111,7 +112,6 @@
 - Path Switch Request
 - N2 Handover Resource Allocation
 - RAN Configuration Update
-- AMF Configuration Update
 - Write-Replace Warning
 - UE Radio Capability Management
 - Location Reporting
@@ -221,21 +221,6 @@
 - UE security capabilities matching
 - Horizontal key derivation
 - Inter-system key derivation
-
-### Operational Features
-- N1/N2 protocol error handling (comprehensive)
-- Congestion control
-- Overload control
-- Load balancing
-- AMF set management
-- AMF region management
-- Network analytics exposure
-- QoS monitoring
-- Charging trigger/data collection
-- Trace management (comprehensive)
-- Statistics/metrics export (Prometheus)
-- YANG models for configuration
-- OAuth2 for SBI authentication
 
 ### Database/Persistence
 - Subscription data persistence (partial)

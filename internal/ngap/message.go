@@ -20,6 +20,7 @@ const (
 	ProcedureCodeErrorIndication           = 11
 	ProcedureCodeOverloadStart             = 24
 	ProcedureCodeOverloadStop              = 25
+	ProcedureCodeAMFConfigurationUpdate    = 39
 )
 
 const (
@@ -77,6 +78,13 @@ const (
 	ProtocolIEIDAMFOverloadResponse           = 1
 	ProtocolIEIDOverloadAction                = 68
 	ProtocolIEIDTrafficLoadReductionIndication = 109
+	ProtocolIEIDAMFName                       = 82
+	ProtocolIEIDServedGUAMIList               = 96
+	ProtocolIEIDRelativeAMFCapacity           = 87
+	ProtocolIEIDPLMNSupportList               = 80
+	ProtocolIEIDAMFTNLAssociationToAddList    = 5
+	ProtocolIEIDAMFTNLAssociationToRemoveList = 6
+	ProtocolIEIDAMFTNLAssociationToUpdateList = 7
 )
 
 type GlobalRANNodeID struct {
