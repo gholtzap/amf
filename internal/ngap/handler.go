@@ -1053,3 +1053,38 @@ func (h *Handler) HandleUERadioCapabilityInfoIndication(ranContext *context.RANC
 
 	return nil
 }
+
+func (h *Handler) SendUETNLABindingReleaseRequest(ue *context.UEContext) error {
+	logger.NgapLog.Info("Sending UE TNLA Binding Release Request")
+
+	if ue.RanContext == nil || ue.RanContext.Conn == nil {
+		return fmt.Errorf("UE has no RAN connection")
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeUETNLABindingReleaseRequest,
+		Criticality:   CriticalityIgnore,
+		IEs: []ProtocolIE{
+			{
+				Id:          ProtocolIEIDAMFUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.AmfUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDRANUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.RanUeNgapId,
+			},
+		},
+	}
+
+	if err := h.server.SendMessage(ue.RanContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send UE TNLA Binding Release Request: %w", err)
+	}
+
+	logger.NgapLog.Infof("UE TNLA Binding Release Request sent for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d",
+		ue.AmfUeNgapId, ue.RanUeNgapId)
+
+	return nil
+}

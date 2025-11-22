@@ -17,6 +17,7 @@
 - AMF Configuration Update
 - RAN Configuration Update
 - UE Radio Capability Management
+- UE TNLA Binding Release
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -115,7 +116,6 @@
 - N2 Handover Resource Allocation
 - Write-Replace Warning
 - Location Reporting
-- UE TNLA Binding Release
 - RAN CP Relocation Indication
 - Trace Start/Deactivation
 - Cell Traffic Trace

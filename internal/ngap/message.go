@@ -23,6 +23,7 @@ const (
 	ProcedureCodeAMFConfigurationUpdate    = 39
 	ProcedureCodeRANConfigurationUpdate    = 40
 	ProcedureCodeUERadioCapabilityInfoIndication = 43
+	ProcedureCodeUETNLABindingReleaseRequest = 49
 )
 
 const (
