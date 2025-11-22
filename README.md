@@ -12,6 +12,7 @@
 - RAN context management
 - Paging
 - NG Reset
+- Error Indication handling
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -109,7 +110,6 @@
 - N2 Handover Resource Allocation
 - RAN Configuration Update
 - AMF Configuration Update
-- Error Indication handling
 - Overload Start/Stop
 - Write-Replace Warning
 - UE Radio Capability Management

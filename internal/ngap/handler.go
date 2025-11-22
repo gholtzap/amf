@@ -625,3 +625,48 @@ func encodeUEAssociatedList(items []UEAssociatedLogicalNGConnectionItem) []byte 
 
 	return data
 }
+
+func (h *Handler) HandleErrorIndication(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Error Indication")
+
+	var amfUeNgapId *int64
+	var ranUeNgapId *int64
+	var cause *Cause
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = &val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = &val
+			}
+		case ProtocolIEIDCause:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 2 {
+				cause = &Cause{
+					CauseGroup: int(data[0]),
+					CauseValue: int(data[1]),
+				}
+			}
+		case ProtocolIEIDCriticalityDiagnostics:
+		}
+	}
+
+	if amfUeNgapId != nil && ranUeNgapId != nil {
+		logger.NgapLog.Warnf("Error Indication received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d", *amfUeNgapId, *ranUeNgapId)
+	} else if amfUeNgapId != nil {
+		logger.NgapLog.Warnf("Error Indication received for AMF UE NGAP ID=%d", *amfUeNgapId)
+	} else if ranUeNgapId != nil {
+		logger.NgapLog.Warnf("Error Indication received for RAN UE NGAP ID=%d", *ranUeNgapId)
+	} else {
+		logger.NgapLog.Warn("Error Indication received (no UE context)")
+	}
+
+	if cause != nil {
+		logger.NgapLog.Warnf("Cause: Group=%d, Value=%d", cause.CauseGroup, cause.CauseValue)
+	}
+
+	return nil
+}

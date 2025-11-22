@@ -17,6 +17,7 @@ const (
 	ProcedureCodePaging                    = 8
 	ProcedureCodeHandoverPreparation       = 0
 	ProcedureCodeHandoverResourceAllocation = 1
+	ProcedureCodeErrorIndication           = 11
 )
 
 const (
@@ -69,6 +70,7 @@ const (
 	ProtocolIEIDResetType                     = 40
 	ProtocolIEIDUEAssociatedLogicalNGConnectionList = 114
 	ProtocolIEIDCause                         = 15
+	ProtocolIEIDCriticalityDiagnostics        = 19
 )
 
 type GlobalRANNodeID struct {
