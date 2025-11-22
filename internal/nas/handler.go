@@ -51,6 +51,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return h.HandleRegistrationRequest(ue, pdu.Payload)
 	case MsgTypeAuthenticationResponse:
 		return h.HandleAuthenticationResponse(ue, pdu.Payload)
+	case MsgTypeAuthenticationFailure:
+		return h.HandleAuthenticationFailure(ue, pdu.Payload)
 	case MsgTypeIdentityResponse:
 		return h.HandleIdentityResponse(ue, pdu.Payload)
 	case MsgTypeSecurityModeComplete:
@@ -315,6 +317,23 @@ func (h *Handler) SendAuthenticationReject(ue *context.UEContext) error {
 
 	nasData := EncodeNASPDU(pdu)
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleAuthenticationFailure(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Authentication Failure for UE SUPI: %s", ue.Supi)
+
+	authFail, err := DecodeAuthenticationFailure(payload)
+	if err != nil {
+		return fmt.Errorf("failed to decode authentication failure: %v", err)
+	}
+
+	logger.NasLog.Warnf("UE authentication failed with cause: 0x%02x", authFail.Cause5GMM)
+
+	if authFail.Cause5GMM == CauseSynchFailure && len(authFail.AuthenticationFailureParameter) > 0 {
+		logger.NasLog.Infof("Synchronization failure detected, AUTS received (length: %d)", len(authFail.AuthenticationFailureParameter))
+	}
+
+	return h.SendAuthenticationReject(ue)
 }
 
 func (h *Handler) SendSecurityModeCommand(ue *context.UEContext) error {

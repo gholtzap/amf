@@ -37,7 +37,7 @@
 - Deregistration (UE-initiated and Network-initiated)
 - Configuration Update Command/Complete
 - GUTI reallocation
-- Authentication Request/Response/Reject
+- Authentication Request/Response/Reject/Failure
 - Identity Request/Response
 
 ### NAS - SM (Session Management)
@@ -133,7 +133,6 @@
 
 #### Authentication
 - EAP-AKA' authentication
-- Authentication failure handling
 - Re-authentication
 
 #### Generic UE Configuration Update

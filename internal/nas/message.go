@@ -186,6 +186,11 @@ type AuthenticationResponseMsg struct {
 	EAPMessage            []byte
 }
 
+type AuthenticationFailureMsg struct {
+	Cause5GMM                     uint8
+	AuthenticationFailureParameter []byte
+}
+
 type SecurityModeCommandMsg struct {
 	SelectedNASSecurityAlgorithms uint8
 	NgKSI                         uint8
@@ -589,6 +594,56 @@ func DecodeAuthenticationResponse(payload []byte) (*AuthenticationResponseMsg, e
 				return nil, fmt.Errorf("invalid EAP message length")
 			}
 			msg.EAPMessage = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
+func DecodeAuthenticationFailure(payload []byte) (*AuthenticationFailureMsg, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("authentication failure too short")
+	}
+
+	msg := &AuthenticationFailureMsg{}
+	offset := 0
+
+	msg.Cause5GMM = payload[offset]
+	offset++
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x30:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid authentication failure parameter length")
+			}
+			msg.AuthenticationFailureParameter = payload[offset : offset+length]
 			offset += length
 
 		default:
