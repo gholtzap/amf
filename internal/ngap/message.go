@@ -18,6 +18,8 @@ const (
 	ProcedureCodeHandoverPreparation       = 0
 	ProcedureCodeHandoverResourceAllocation = 1
 	ProcedureCodeErrorIndication           = 11
+	ProcedureCodeOverloadStart             = 24
+	ProcedureCodeOverloadStop              = 25
 )
 
 const (
@@ -71,6 +73,10 @@ const (
 	ProtocolIEIDUEAssociatedLogicalNGConnectionList = 114
 	ProtocolIEIDCause                         = 15
 	ProtocolIEIDCriticalityDiagnostics        = 19
+	ProtocolIEIDOverloadStartNSSAIList        = 69
+	ProtocolIEIDAMFOverloadResponse           = 1
+	ProtocolIEIDOverloadAction                = 68
+	ProtocolIEIDTrafficLoadReductionIndication = 109
 )
 
 type GlobalRANNodeID struct {
@@ -168,6 +174,22 @@ type Cause struct {
 	CauseGroup int
 	CauseValue int
 }
+
+type OverloadAction int
+
+const (
+	OverloadActionRejectNonEmergencyMoData OverloadAction = 0
+	OverloadActionRejectRRCCrSignalling    OverloadAction = 1
+	OverloadActionPermitEmergencySessionsAndMobileTerminatedServicesOnly OverloadAction = 2
+	OverloadActionPermitHighPrioritySessionsAndMobileTerminatedServicesOnly OverloadAction = 3
+)
+
+type OverloadResponse int
+
+const (
+	OverloadResponseReject OverloadResponse = 0
+	OverloadResponseAccept OverloadResponse = 1
+)
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

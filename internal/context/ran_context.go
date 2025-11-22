@@ -20,6 +20,10 @@ type RANContext struct {
 	UeContexts sync.Map
 
 	DefaultPagingDrx string
+
+	IsOverloaded                     bool
+	OverloadAction                   int
+	TrafficLoadReductionIndication   int
 }
 
 type GlobalRanNodeId struct {

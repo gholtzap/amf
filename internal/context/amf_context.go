@@ -54,6 +54,9 @@ type AMFContext struct {
 	amfUeNgapIdCounter int64
 	tmsiCounter        uint32
 
+	IsOverloaded   bool
+	OverloadAction int
+
 	mu sync.RWMutex
 }
 

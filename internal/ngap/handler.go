@@ -670,3 +670,112 @@ func (h *Handler) HandleErrorIndication(ranContext *context.RANContext, pdu *NGA
 
 	return nil
 }
+
+func (h *Handler) HandleOverloadStart(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Overload Start")
+
+	var overloadResponse OverloadResponse = OverloadResponseAccept
+	var trafficLoadReduction int = 0
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFOverloadResponse:
+			if data, ok := ie.Value.([]byte); ok && len(data) > 0 {
+				overloadResponse = OverloadResponse(data[0])
+			}
+		case ProtocolIEIDTrafficLoadReductionIndication:
+			if data, ok := ie.Value.([]byte); ok && len(data) > 0 {
+				trafficLoadReduction = int(data[0])
+			}
+		case ProtocolIEIDOverloadStartNSSAIList:
+		}
+	}
+
+	ranContext.mu.Lock()
+	ranContext.IsOverloaded = true
+	ranContext.TrafficLoadReductionIndication = trafficLoadReduction
+	ranContext.mu.Unlock()
+
+	logger.NgapLog.Infof("RAN %s entered overload state - Response: %d, Traffic Load Reduction: %d%%",
+		ranContext.RanNodeName, overloadResponse, trafficLoadReduction)
+
+	return nil
+}
+
+func (h *Handler) HandleOverloadStop(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Overload Stop")
+
+	ranContext.mu.Lock()
+	ranContext.IsOverloaded = false
+	ranContext.TrafficLoadReductionIndication = 0
+	ranContext.mu.Unlock()
+
+	logger.NgapLog.Infof("RAN %s exited overload state", ranContext.RanNodeName)
+
+	return nil
+}
+
+func (h *Handler) SendOverloadStart(ranContext *context.RANContext, overloadAction OverloadAction, trafficLoadReduction int) error {
+	logger.NgapLog.Info("Sending Overload Start")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	ies := []ProtocolIE{
+		{
+			Id:          ProtocolIEIDOverloadAction,
+			Criticality: CriticalityReject,
+			Value:       []byte{byte(overloadAction)},
+		},
+	}
+
+	if trafficLoadReduction > 0 && trafficLoadReduction <= 99 {
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDTrafficLoadReductionIndication,
+			Criticality: CriticalityIgnore,
+			Value:       []byte{byte(trafficLoadReduction)},
+		})
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeOverloadStart,
+		Criticality:   CriticalityIgnore,
+		IEs:           ies,
+	}
+
+	h.amfContext.mu.Lock()
+	h.amfContext.IsOverloaded = true
+	h.amfContext.OverloadAction = int(overloadAction)
+	h.amfContext.mu.Unlock()
+
+	logger.NgapLog.Infof("Sending Overload Start to RAN %s - Action: %d, Traffic Load Reduction: %d%%",
+		ranContext.RanNodeName, overloadAction, trafficLoadReduction)
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}
+
+func (h *Handler) SendOverloadStop(ranContext *context.RANContext) error {
+	logger.NgapLog.Info("Sending Overload Stop")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeOverloadStop,
+		Criticality:   CriticalityIgnore,
+		IEs:           []ProtocolIE{},
+	}
+
+	h.amfContext.mu.Lock()
+	h.amfContext.IsOverloaded = false
+	h.amfContext.OverloadAction = 0
+	h.amfContext.mu.Unlock()
+
+	logger.NgapLog.Infof("Sending Overload Stop to RAN %s", ranContext.RanNodeName)
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}
