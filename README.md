@@ -43,8 +43,8 @@
 - 5G-AKA authentication (via AUSF)
 - Re-authentication
 - NAS Security Mode Command/Complete
-- NIA1/NIA2/NIA3 integrity protection
-- NEA1/NEA2/NEA3 encryption
+- NIA0/NIA1/NIA2/NIA3 integrity protection
+- NEA0/NEA1/NEA2/NEA3 encryption
 - Key derivation (Kseaf → Kamf → KnasEnc/KnasInt)
 - MAC calculation and verification
 - Security context management
@@ -223,7 +223,6 @@
 - Forbidden area management
 
 ### Security Features (Not Implemented)
-- NEA0 ciphering algorithm
 - Security context synchronization
 - Null security
 - Horizontal key derivation
