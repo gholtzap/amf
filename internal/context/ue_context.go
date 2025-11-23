@@ -51,9 +51,19 @@ type UEContext struct {
 	RmState          RmState // Registration Management State
 
 	// Timers
+	T3502 *time.Timer // Deregistration attempt timer
+	T3512 *time.Timer // Periodic registration update timer
+	T3513 *time.Timer // Paging timer
+	T3522 *time.Timer // Deregistration timer
 	T3550 *time.Timer // Registration Accept timer
 	T3560 *time.Timer // Authentication Request timer
-	T3570 *time.Timer // Security Mode Command timer
+	T3565 *time.Timer // Security Mode Command timer
+	T3570 *time.Timer // Identity Request timer
+
+	// Timer retry counters
+	T3550Counter int
+	T3560Counter int
+	T3565Counter int
 
 	// Re-authentication state
 	IsReAuthenticating bool
@@ -236,4 +246,44 @@ func (ue *UEContext) DeletePduSession(pduSessionId int32) bool {
 
 	delete(ue.PduSessions, pduSessionId)
 	return true
+}
+
+func (ue *UEContext) StopTimer(timer **time.Timer) {
+	ue.mu.Lock()
+	defer ue.mu.Unlock()
+
+	if *timer != nil {
+		(*timer).Stop()
+		*timer = nil
+	}
+}
+
+func (ue *UEContext) StopT3550() {
+	ue.StopTimer(&ue.T3550)
+	ue.T3550Counter = 0
+}
+
+func (ue *UEContext) StopT3560() {
+	ue.StopTimer(&ue.T3560)
+	ue.T3560Counter = 0
+}
+
+func (ue *UEContext) StopT3565() {
+	ue.StopTimer(&ue.T3565)
+	ue.T3565Counter = 0
+}
+
+func (ue *UEContext) StopT3512() {
+	ue.StopTimer(&ue.T3512)
+}
+
+func (ue *UEContext) StopAllTimers() {
+	ue.StopT3550()
+	ue.StopT3560()
+	ue.StopT3565()
+	ue.StopT3512()
+	ue.StopTimer(&ue.T3502)
+	ue.StopTimer(&ue.T3513)
+	ue.StopTimer(&ue.T3522)
+	ue.StopTimer(&ue.T3570)
 }

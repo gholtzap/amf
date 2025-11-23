@@ -3,6 +3,7 @@ package nas
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/consumer"
@@ -67,6 +68,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return h.HandleExtendedServiceRequest(ue, pdu.Payload)
 	case MsgTypeRegistrationComplete:
 		logger.NasLog.Infof("Registration Complete received for UE: %s", ue.Supi)
+		ue.StopT3550()
+		h.startT3512(ue)
 		return nil
 	case MsgTypeConfigurationUpdateComplete:
 		return h.HandleConfigurationUpdateComplete(ue, pdu.Payload)
@@ -218,6 +221,9 @@ func (h *Handler) SendAuthenticationRequest(ue *context.UEContext, rand, autn []
 	}
 
 	nasData := EncodeNASPDU(pdu)
+
+	h.startT3560(ue, rand, autn)
+
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 
@@ -266,6 +272,8 @@ func (h *Handler) HandleIdentityResponse(ue *context.UEContext, payload []byte) 
 
 func (h *Handler) HandleAuthenticationResponse(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Authentication Response for UE SUPI: %s", ue.Supi)
+
+	ue.StopT3560()
 
 	authResp, err := DecodeAuthenticationResponse(payload)
 	if err != nil {
@@ -459,11 +467,15 @@ func (h *Handler) SendSecurityModeCommand(ue *context.UEContext) error {
 		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
 	}
 
+	h.startT3565(ue)
+
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 
 func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Security Mode Complete for UE SUPI: %s", ue.Supi)
+
+	ue.StopT3565()
 
 	smcResp, err := DecodeSecurityModeComplete(payload)
 	if err != nil {
@@ -536,6 +548,8 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
+
+	h.startT3550(ue)
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
@@ -1278,4 +1292,135 @@ func (h *Handler) HandleFiveGSMStatus(ue *context.UEContext, pduSessionID uint8,
 	}
 
 	return nil
+}
+
+func (h *Handler) startT3560(ue *context.UEContext, rand, autn []byte) {
+	ue.StopT3560()
+
+	cfg := h.amfContext
+	if cfg == nil {
+		return
+	}
+
+	timerConfig := getTimerConfig("T3560")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3560Counter++
+	logger.NasLog.Infof("Starting T3560 timer (attempt %d/%d) for UE: %s",
+		ue.T3560Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3560 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3560 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3560Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3560Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Authentication Request for UE: %s", ue.Supi)
+			h.SendAuthenticationRequest(ue, rand, autn)
+			h.startT3560(ue, rand, autn)
+		} else {
+			logger.NasLog.Errorf("T3560 max retries reached for UE: %s, authentication failed", ue.Supi)
+			ue.StopT3560()
+			h.SendAuthenticationReject(ue)
+		}
+	})
+}
+
+func (h *Handler) startT3565(ue *context.UEContext) {
+	ue.StopT3565()
+
+	timerConfig := getTimerConfig("T3565")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3565Counter++
+	logger.NasLog.Infof("Starting T3565 timer (attempt %d/%d) for UE: %s",
+		ue.T3565Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3565 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3565 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3565Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3565Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Security Mode Command for UE: %s", ue.Supi)
+			h.SendSecurityModeCommand(ue)
+			h.startT3565(ue)
+		} else {
+			logger.NasLog.Errorf("T3565 max retries reached for UE: %s, security mode failed", ue.Supi)
+			ue.StopT3565()
+			h.SendRegistrationReject(ue, CauseProtocolError)
+		}
+	})
+}
+
+func (h *Handler) startT3550(ue *context.UEContext) {
+	ue.StopT3550()
+
+	timerConfig := getTimerConfig("T3550")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3550Counter++
+	logger.NasLog.Infof("Starting T3550 timer (attempt %d/%d) for UE: %s",
+		ue.T3550Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3550 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3550 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3550Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3550Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Registration Accept for UE: %s", ue.Supi)
+			h.SendRegistrationAccept(ue)
+			h.startT3550(ue)
+		} else {
+			logger.NasLog.Errorf("T3550 max retries reached for UE: %s, registration failed", ue.Supi)
+			ue.StopT3550()
+		}
+	})
+}
+
+func (h *Handler) startT3512(ue *context.UEContext) {
+	ue.StopT3512()
+
+	cfg := h.amfContext
+	if cfg == nil {
+		return
+	}
+
+	t3512ValueSeconds := getT3512Value()
+	if t3512ValueSeconds <= 0 {
+		return
+	}
+
+	logger.NasLog.Infof("Starting T3512 timer (%d seconds) for UE: %s", t3512ValueSeconds, ue.Supi)
+
+	ue.T3512 = time.AfterFunc(time.Duration(t3512ValueSeconds)*time.Second, func() {
+		logger.NasLog.Infof("T3512 timer expired for UE: %s, expecting periodic registration update", ue.Supi)
+	})
+}
+
+func getTimerConfig(timerName string) *TimerConfig {
+	switch timerName {
+	case "T3550":
+		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+	case "T3560":
+		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+	case "T3565":
+		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+	default:
+		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
+	}
+}
+
+func getT3512Value() int {
+	return 3600
+}
+
+type TimerConfig struct {
+	Enable        bool
+	ExpireTime    int
+	MaxRetryTimes int
 }
