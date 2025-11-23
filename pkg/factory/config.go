@@ -38,6 +38,7 @@ type Configuration struct {
 	T3522                           *TimerValue   `json:"t3522"`
 	T3540                           *TimerValue   `json:"t3540"`
 	T3550                           *TimerValue   `json:"t3550"`
+	T3555                           *TimerValue   `json:"t3555"`
 	T3560                           *TimerValue   `json:"t3560"`
 	T3565                           *TimerValue   `json:"t3565"`
 	T3570                           *TimerValue   `json:"t3570"`

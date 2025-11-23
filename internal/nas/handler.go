@@ -1240,11 +1240,17 @@ func (h *Handler) SendConfigurationUpdateCommand(ue *context.UEContext, newGuti 
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
 
-	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+	err = h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+	if err == nil {
+		h.startT3555(ue)
+	}
+	return err
 }
 
 func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Configuration Update Complete for UE SUPI: %s", ue.Supi)
+
+	ue.StopT3555()
 
 	_, err := DecodeConfigurationUpdateComplete(payload)
 	if err != nil {
@@ -1505,6 +1511,33 @@ func (h *Handler) startT3550(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3555(ue *context.UEContext) {
+	ue.StopT3555()
+
+	timerConfig := getTimerConfig("T3555")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3555Counter++
+	logger.NasLog.Infof("Starting T3555 timer (attempt %d/%d) for UE: %s",
+		ue.T3555Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3555 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3555 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3555Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3555Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Configuration Update Command for UE: %s", ue.Supi)
+			h.SendConfigurationUpdateCommand(ue, ue.Guti)
+			h.startT3555(ue)
+		} else {
+			logger.NasLog.Errorf("T3555 max retries reached for UE: %s, configuration update failed", ue.Supi)
+			ue.StopT3555()
+		}
+	})
+}
+
 func (h *Handler) startT3512(ue *context.UEContext) {
 	ue.StopT3512()
 
@@ -1636,6 +1669,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 		timerValue = cfg.Configuration.T3540
 	case "T3550":
 		timerValue = cfg.Configuration.T3550
+	case "T3555":
+		timerValue = cfg.Configuration.T3555
 	case "T3560":
 		timerValue = cfg.Configuration.T3560
 	case "T3565":
