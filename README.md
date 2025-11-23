@@ -50,6 +50,7 @@
 
 #### Other MM Procedures
 - Service Request/Accept
+- Extended service request
 - Deregistration (UE-initiated and Network-initiated)
 - Configuration Update Command/Complete
 - GUTI reallocation
@@ -149,7 +150,6 @@
 #### Connection Management
 - Service Request with emergency fallback
 - NAS transport reject
-- Extended service request
 
 #### 5G MM Timers
 - T3502, T3510, T3511, T3512, T3513, T3516, T3517, T3519, T3520, T3521, T3522, T3525, T3540, T3550, T3555, T3560, T3565, T3570

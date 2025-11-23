@@ -27,6 +27,7 @@ const (
 	MsgTypeServiceRequest             = 0x4c
 	MsgTypeServiceReject              = 0x4d
 	MsgTypeServiceAccept              = 0x4e
+	MsgTypeExtendedServiceRequest     = 0x4f
 	MsgTypeConfigurationUpdateCommand = 0x54
 	MsgTypeConfigurationUpdateComplete = 0x55
 	MsgTypeAuthenticationRequest      = 0x56
