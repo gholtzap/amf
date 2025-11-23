@@ -24,6 +24,7 @@
 - Write-Replace Warning
 - Location Reporting
 - Cell Traffic Trace
+- Handover Required
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -117,7 +118,7 @@
 ## NOT IMPLEMENTED FEATURES
 
 ### NGAP Procedures
-- Handover procedures (Handover Request/Notify/Command/Required)
+- Handover procedures (Handover Request/Notify/Command)
 - N2 Handover Resource Allocation
 - RAN CP Relocation Indication
 

@@ -1616,3 +1616,97 @@ func (h *Handler) SendCellTrafficTrace(ranContext *context.RANContext, nrcgi *NR
 
 	return nil
 }
+
+func (h *Handler) HandleHandoverRequired(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Handover Required")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var handoverType HandoverType
+	var targetID *TargetID
+	var pduSessionResourceList []PDUSessionResourceItemHORqd
+	var sourceToTargetContainer []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDHandoverType:
+			if data, ok := ie.Value.([]byte); ok && len(data) > 0 {
+				handoverType = HandoverType(data[0])
+			}
+		case ProtocolIEIDTargetID:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 6 {
+				targetID = &TargetID{
+					TargetRANNodeID: &GlobalRANNodeID{
+						PLMNIdentity: data[:3],
+						GNBID:        data[3:],
+					},
+				}
+			}
+		case ProtocolIEIDPDUSessionResourceListHORqd:
+			if data, ok := ie.Value.([]byte); ok {
+				pduSessionResourceList = parsePDUSessionResourceListHORqd(data)
+			}
+		case ProtocolIEIDSourceToTargetTransparentContainer:
+			if data, ok := ie.Value.([]byte); ok {
+				sourceToTargetContainer = data
+			}
+		case ProtocolIEIDCause:
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	logger.NgapLog.Infof("Handover Required received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, Handover Type=%d, PDU Sessions=%d, Container length=%d",
+		amfUeNgapId, ranUeNgapId, handoverType, len(pduSessionResourceList), len(sourceToTargetContainer))
+
+	if targetID != nil && targetID.TargetRANNodeID != nil {
+		logger.NgapLog.Infof("Target RAN Node: PLMN=%v, GNB ID=%v",
+			targetID.TargetRANNodeID.PLMNIdentity, targetID.TargetRANNodeID.GNBID)
+	}
+
+	_ = ue
+
+	return nil
+}
+
+func parsePDUSessionResourceListHORqd(data []byte) []PDUSessionResourceItemHORqd {
+	items := []PDUSessionResourceItemHORqd{}
+
+	offset := 0
+	for offset < len(data) {
+		if offset+1 > len(data) {
+			break
+		}
+
+		item := PDUSessionResourceItemHORqd{
+			PDUSessionID: int(data[offset]),
+		}
+		offset++
+
+		if offset+2 <= len(data) {
+			transferLen := int(data[offset])<<8 | int(data[offset+1])
+			offset += 2
+
+			if offset+transferLen <= len(data) {
+				item.HandoverTransfer = make([]byte, transferLen)
+				copy(item.HandoverTransfer, data[offset:offset+transferLen])
+				offset += transferLen
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	return items
+}

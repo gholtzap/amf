@@ -113,6 +113,10 @@ const (
 	ProtocolIEIDLocationReportingRequestType  = 64
 	ProtocolIEIDLocationReportingReferenceID  = 65
 	ProtocolIEIDNGRANCGI                      = 67
+	ProtocolIEIDHandoverType                  = 28
+	ProtocolIEIDTargetID                      = 104
+	ProtocolIEIDPDUSessionResourceListHORqd   = 72
+	ProtocolIEIDSourceToTargetTransparentContainer = 99
 )
 
 type GlobalRANNodeID struct {
@@ -257,6 +261,24 @@ const (
 	LocationReportingRequestTypeChangeOfUEPresenceInAreaOfInterest LocationReportingRequestType = 4
 	LocationReportingRequestTypeStopChangeOfUEPresenceInAreaOfInterest LocationReportingRequestType = 5
 )
+
+type HandoverType int
+
+const (
+	HandoverTypeIntra5GS HandoverType = 0
+	HandoverTypeFiveGSToEPS HandoverType = 1
+	HandoverTypeEPSTo5GS HandoverType = 2
+)
+
+type TargetID struct {
+	TargetRANNodeID *GlobalRANNodeID
+	TAI             *TAI
+}
+
+type PDUSessionResourceItemHORqd struct {
+	PDUSessionID     int
+	HandoverTransfer []byte
+}
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {
