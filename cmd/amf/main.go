@@ -132,6 +132,7 @@ func main() {
 
 	sbiServer := sbi.NewServer(amfContext)
 	sbiServer.SetNASHandler(nasHandler)
+	sbiServer.SetNGAPHandler(ngapHandler)
 
 	go func() {
 		if err := sbiServer.Run(); err != nil {

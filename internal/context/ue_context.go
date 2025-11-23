@@ -68,6 +68,7 @@ type UEContext struct {
 	T3565Counter int
 	T3570Counter int
 	T3540Counter int
+	T3513Counter int
 
 	// Deregistration request state for T3540 retransmission
 	DeregType              uint8
@@ -296,6 +297,11 @@ func (ue *UEContext) StopT3540() {
 	ue.T3540Counter = 0
 }
 
+func (ue *UEContext) StopT3513() {
+	ue.StopTimer(&ue.T3513)
+	ue.T3513Counter = 0
+}
+
 func (ue *UEContext) StopAllTimers() {
 	ue.StopT3550()
 	ue.StopT3560()
@@ -303,7 +309,7 @@ func (ue *UEContext) StopAllTimers() {
 	ue.StopT3570()
 	ue.StopT3540()
 	ue.StopT3512()
+	ue.StopT3513()
 	ue.StopTimer(&ue.T3502)
-	ue.StopTimer(&ue.T3513)
 	ue.StopTimer(&ue.T3522)
 }

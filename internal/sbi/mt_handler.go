@@ -105,11 +105,22 @@ func (s *Server) EnableUEReachability(ueContextId string, reqData *EnableUeReach
 	if reqData.Reachability == string(UeReachabilityREACHABLE) && ue.CmState == context.CmIdle {
 		logger.SbiLog.Infof("UE %s is in IDLE state, paging required to make reachable", ueContextId)
 
-		ue.CmState = context.CmConnected
+		if s.ngapHandler != nil {
+			if err := s.ngapHandler.SendPaging(ue); err != nil {
+				logger.SbiLog.Errorf("Failed to send paging for UE %s: %v", ueContextId, err)
+				return nil, &ProblemDetails{
+					Type:   "about:blank",
+					Title:  "Internal Server Error",
+					Status: http.StatusInternalServerError,
+					Detail: fmt.Sprintf("Failed to send paging: %v", err),
+				}
+			}
+			logger.SbiLog.Infof("Paging initiated for UE %s", ueContextId)
+		}
 
 		response.Reachability = string(UeReachabilityREACHABLE)
 
-		logger.SbiLog.Infof("UE %s paged successfully and is now reachable", ueContextId)
+		logger.SbiLog.Infof("UE %s paging process started", ueContextId)
 	} else if reqData.Reachability == string(UeReachabilityUNREACHABLE) {
 		logger.SbiLog.Infof("Requested to mark UE %s as unreachable", ueContextId)
 		response.Reachability = string(UeReachabilityUNREACHABLE)
@@ -169,7 +180,12 @@ func (s *Server) EnableGroupReachability(reqData *EnableGroupReachabilityReqData
 
 			if ue.CmState == context.CmIdle {
 				logger.SbiLog.Infof("Paging UE %s to make it reachable for MBS session", supi)
-				ue.CmState = context.CmConnected
+				if s.ngapHandler != nil {
+					if err := s.ngapHandler.SendPaging(ue); err != nil {
+						logger.SbiLog.Errorf("Failed to send paging for UE %s: %v", supi, err)
+						continue
+					}
+				}
 			}
 
 			if ue.CmState == context.CmConnected {

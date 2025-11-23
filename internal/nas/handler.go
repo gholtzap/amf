@@ -625,6 +625,7 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 	}
 
 	ue.CmState = context.CmConnected
+	ue.StopT3513()
 
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {
@@ -735,6 +736,7 @@ func (h *Handler) HandleExtendedServiceRequest(ue *context.UEContext, payload []
 	}
 
 	ue.CmState = context.CmConnected
+	ue.StopT3513()
 
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {
@@ -1474,6 +1476,35 @@ func (h *Handler) startT3540(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3513(ue *context.UEContext) {
+	ue.StopT3513()
+
+	timerConfig := getTimerConfig("T3513")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3513Counter++
+	logger.NasLog.Infof("Starting T3513 timer (attempt %d/%d) for UE: %s",
+		ue.T3513Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3513 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3513 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3513Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3513Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Paging for UE: %s", ue.Supi)
+			if err := h.ngapHandler.(interface{ SendPaging(*context.UEContext) error }).SendPaging(ue); err != nil {
+				logger.NasLog.Errorf("Failed to send paging: %v", err)
+			}
+			h.startT3513(ue)
+		} else {
+			logger.NasLog.Errorf("T3513 max retries reached for UE: %s, paging failed", ue.Supi)
+			ue.StopT3513()
+		}
+	})
+}
+
 func getTimerConfig(timerName string) *TimerConfig {
 	switch timerName {
 	case "T3550":
@@ -1486,6 +1517,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
 	case "T3540":
 		return &TimerConfig{Enable: true, ExpireTime: 10, MaxRetryTimes: 4}
+	case "T3513":
+		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
 	}
@@ -1499,4 +1532,9 @@ type TimerConfig struct {
 	Enable        bool
 	ExpireTime    int
 	MaxRetryTimes int
+}
+
+func (h *Handler) StartPagingTimer(ue *context.UEContext) error {
+	h.startT3513(ue)
+	return nil
 }

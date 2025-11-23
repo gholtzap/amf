@@ -21,11 +21,16 @@ type NASHandler interface {
 	SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8, reregistrationRequired bool) error
 }
 
+type NGAPHandler interface {
+	SendPaging(ue *context.UEContext) error
+}
+
 type Server struct {
-	httpServer *http.Server
-	router     *http.ServeMux
-	amfContext *context.AMFContext
-	nasHandler NASHandler
+	httpServer  *http.Server
+	router      *http.ServeMux
+	amfContext  *context.AMFContext
+	nasHandler  NASHandler
+	ngapHandler NGAPHandler
 }
 
 func NewServer(ctx *context.AMFContext) *Server {
@@ -37,6 +42,10 @@ func NewServer(ctx *context.AMFContext) *Server {
 
 func (s *Server) SetNASHandler(handler NASHandler) {
 	s.nasHandler = handler
+}
+
+func (s *Server) SetNGAPHandler(handler NGAPHandler) {
+	s.ngapHandler = handler
 }
 
 func (s *Server) Run() error {

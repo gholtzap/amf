@@ -15,6 +15,7 @@ type Handler struct {
 
 type NASHandler interface {
 	HandleNASMessage(ue *context.UEContext, nasPDU []byte) error
+	StartPagingTimer(ue *context.UEContext) error
 }
 
 func NewHandler(ctx *context.AMFContext) *Handler {
@@ -154,6 +155,7 @@ func (h *Handler) HandleInitialUEMessage(ranContext *context.RANContext, pdu *NG
 	ue := h.amfContext.NewUEContext(ranUeNgapId)
 	ue.RanContext = ranContext
 	ue.CmState = context.CmConnected
+	ue.StopT3513()
 	ue.AccessType = context.AccessType3GPP
 
 	if userLocationInfo != nil && userLocationInfo.TAI != nil {
@@ -242,6 +244,7 @@ func (h *Handler) HandleInitialContextSetupResponse(ranContext *context.RANConte
 	}
 
 	ue.CmState = context.CmConnected
+	ue.StopT3513()
 
 	logger.NgapLog.Infof("Initial Context Setup completed for AMF UE NGAP ID=%d", amfUeNgapId)
 
@@ -456,6 +459,12 @@ func (h *Handler) SendPaging(ue *context.UEContext) error {
 		}
 
 		logger.NgapLog.Infof("Paging sent to RAN: %s for UE with 5G-S-TMSI", ran.RanNodeName)
+	}
+
+	if h.nasHandler != nil {
+		if err := h.nasHandler.StartPagingTimer(ue); err != nil {
+			logger.NgapLog.Warnf("Failed to start paging timer: %v", err)
+		}
 	}
 
 	return nil
