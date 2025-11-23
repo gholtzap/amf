@@ -28,6 +28,8 @@ const (
 	ProcedureCodeTraceStart                = 13
 	ProcedureCodeDeactivateTrace           = 23
 	ProcedureCodeWriteReplaceWarning       = 34
+	ProcedureCodeLocationReportingControl  = 9
+	ProcedureCodeLocationReport            = 10
 )
 
 const (
@@ -107,6 +109,8 @@ const (
 	ProtocolIEIDDataCodingScheme              = 20
 	ProtocolIEIDWarningMessageContents        = 131
 	ProtocolIEIDConcurrentWarningMessageIndicator = 18
+	ProtocolIEIDLocationReportingRequestType  = 64
+	ProtocolIEIDLocationReportingReferenceID  = 65
 )
 
 type GlobalRANNodeID struct {
@@ -240,6 +244,17 @@ type WarningAreaList struct {
 }
 
 type WarningType []byte
+
+type LocationReportingRequestType int
+
+const (
+	LocationReportingRequestTypeStartOfUEPresenceInAreaOfInterest LocationReportingRequestType = 0
+	LocationReportingRequestTypeStopOfUEPresenceInAreaOfInterest  LocationReportingRequestType = 1
+	LocationReportingRequestTypeUEPresenceInAreaOfInterest        LocationReportingRequestType = 2
+	LocationReportingRequestTypeDirectLocationReporting           LocationReportingRequestType = 3
+	LocationReportingRequestTypeChangeOfUEPresenceInAreaOfInterest LocationReportingRequestType = 4
+	LocationReportingRequestTypeStopChangeOfUEPresenceInAreaOfInterest LocationReportingRequestType = 5
+)
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

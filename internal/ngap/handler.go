@@ -1460,3 +1460,108 @@ func (h *Handler) SendPathSwitchRequestAcknowledge(ranContext *context.RANContex
 
 	return h.server.SendMessage(ranContext.Conn, pdu)
 }
+
+func (h *Handler) HandleLocationReport(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Location Report")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var userLocationInfo *UserLocationInformation
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDUserLocationInformation:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 14 {
+				userLocationInfo = &UserLocationInformation{
+					NRCGIPresent: true,
+					NRCGI: &NRCGI{
+						PLMNIdentity: data[:3],
+						NRCellID:     data[3:8],
+					},
+					TAI: &TAI{
+						PLMNIdentity: data[8:11],
+						TAC:          data[11:14],
+					},
+				}
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	if userLocationInfo != nil {
+		if userLocationInfo.TAI != nil {
+			ue.Tai = context.Tai{
+				PlmnId: context.PlmnId{
+					Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
+					Mnc: "01",
+				},
+				Tac: string(userLocationInfo.TAI.TAC),
+			}
+		}
+
+		if userLocationInfo.NRCGI != nil {
+			ue.CellId = string(userLocationInfo.NRCGI.NRCellID)
+		}
+
+		logger.NgapLog.Infof("Updated UE location: TAI=%+v, Cell ID=%s", ue.Tai, ue.CellId)
+	}
+
+	logger.NgapLog.Infof("Location Report received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d",
+		amfUeNgapId, ranUeNgapId)
+
+	return nil
+}
+
+func (h *Handler) SendLocationReportingControl(ue *context.UEContext, requestType LocationReportingRequestType) error {
+	logger.NgapLog.Info("Sending Location Reporting Control")
+
+	if ue.RanContext == nil || ue.RanContext.Conn == nil {
+		return fmt.Errorf("UE has no RAN connection")
+	}
+
+	ies := []ProtocolIE{
+		{
+			Id:          ProtocolIEIDAMFUENGAPID,
+			Criticality: CriticalityReject,
+			Value:       ue.AmfUeNgapId,
+		},
+		{
+			Id:          ProtocolIEIDRANUENGAPID,
+			Criticality: CriticalityReject,
+			Value:       ue.RanUeNgapId,
+		},
+		{
+			Id:          ProtocolIEIDLocationReportingRequestType,
+			Criticality: CriticalityIgnore,
+			Value:       []byte{byte(requestType)},
+		},
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeLocationReportingControl,
+		Criticality:   CriticalityIgnore,
+		IEs:           ies,
+	}
+
+	if err := h.server.SendMessage(ue.RanContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send Location Reporting Control: %w", err)
+	}
+
+	logger.NgapLog.Infof("Location Reporting Control sent for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, Request Type=%d",
+		ue.AmfUeNgapId, ue.RanUeNgapId, requestType)
+
+	return nil
+}

@@ -22,6 +22,7 @@
 - Trace Start
 - Deactivate Trace
 - Write-Replace Warning
+- Location Reporting
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -117,7 +118,6 @@
 ### NGAP Procedures
 - Handover procedures (Handover Request/Notify/Command/Required)
 - N2 Handover Resource Allocation
-- Location Reporting
 - RAN CP Relocation Indication
 - Cell Traffic Trace
 

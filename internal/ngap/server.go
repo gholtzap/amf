@@ -129,6 +129,8 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return s.handler.HandleRANConfigurationUpdate(ranContext, pdu)
 	case ProcedureCodeUERadioCapabilityInfoIndication:
 		return s.handler.HandleUERadioCapabilityInfoIndication(ranContext, pdu)
+	case ProcedureCodeLocationReport:
+		return s.handler.HandleLocationReport(ranContext, pdu)
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil
