@@ -171,6 +171,8 @@ type PduSessionContext struct {
 	SmContextRef   string
 	SmContextId    string
 	AlwaysOn       bool
+	SscMode        uint8
+	PduSessionType uint8
 }
 
 // PduSessionState represents PDU Session state

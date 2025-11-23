@@ -953,6 +953,8 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		logger.NasLog.Infof("Received N1 SM message from SMF")
 	}
 
+	selectedSscMode := h.selectSscMode(smReq.SSCMode, dnnStr)
+
 	pduSessionCtx := &context.PduSessionContext{
 		PduSessionId:  int32(pduSessionID),
 		SmContextRef:  createResp.SmContextRef,
@@ -961,18 +963,20 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		SessionAmbr:   &context.Ambr{Uplink: "100 Mbps", Downlink: "100 Mbps"},
 		State:         context.PduSessionActive,
 		AlwaysOn:      alwaysOnRequested,
+		SscMode:       selectedSscMode,
+		PduSessionType: smReq.PDUSessionType,
 	}
 
 	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
-	logger.NasLog.Infof("PDU Session %d created for UE %s", pduSessionID, ue.Supi)
+	logger.NasLog.Infof("PDU Session %d created for UE %s (SSC Mode: %d, PDU Session Type: %d)", pduSessionID, ue.Supi, selectedSscMode, smReq.PDUSessionType)
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
 
 	acceptMsg := &PDUSessionEstablishmentAcceptMsg{
-		PDUSessionType: 1,
-		SSCMode:        1,
+		PDUSessionType: smReq.PDUSessionType,
+		SSCMode:        selectedSscMode,
 		SessionAMBR:    []byte{0x3e, 0x80, 0x3e, 0x80},
 		QoSRules:       []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
 		PDUAddress:     []byte{0x01, 192, 168, 100, 10},
@@ -1023,6 +1027,33 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 	}
 
 	return nil
+}
+
+func (h *Handler) selectSscMode(requestedMode uint8, dnn string) uint8 {
+	if requestedMode == 0 {
+		return 1
+	}
+
+	supportedModes := map[string][]uint8{
+		"internet": {1, 2, 3},
+		"ims":      {1},
+		"default":  {1, 2, 3},
+	}
+
+	allowedModes, exists := supportedModes[dnn]
+	if !exists {
+		allowedModes = supportedModes["default"]
+	}
+
+	for _, mode := range allowedModes {
+		if mode == requestedMode {
+			logger.NasLog.Infof("SSC Mode %d selected for DNN %s", requestedMode, dnn)
+			return requestedMode
+		}
+	}
+
+	logger.NasLog.Infof("Requested SSC Mode %d not supported for DNN %s, selecting mode 1", requestedMode, dnn)
+	return 1
 }
 
 func (h *Handler) SendPDUSessionEstablishmentReject(ue *context.UEContext, pduSessionID uint8, cause uint8) error {
