@@ -1500,6 +1500,39 @@ func (h *Handler) startT3540(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3522(ue *context.UEContext) {
+	ue.StopT3522()
+
+	timerConfig := getTimerConfig("T3522")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3522Counter++
+	logger.NasLog.Infof("Starting T3522 timer (attempt %d/%d) for UE: %s",
+		ue.T3522Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3522 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3522 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3522Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3522Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Deregistration Request for UE: %s", ue.Supi)
+			h.SendDeregistrationRequest(ue, ue.DeregType, ue.DeregCause, ue.DeregReregRequired)
+		} else {
+			logger.NasLog.Errorf("T3522 max retries reached for UE: %s, deregistration failed", ue.Supi)
+			ue.StopT3522()
+			ue.RegistrationState = context.RegStateDeregistered
+			ue.RmState = context.RmDeregistered
+			if err := h.amfContext.PersistUEContext(ue); err != nil {
+				logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+			}
+			h.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+			logger.NasLog.Infof("UE context deleted for AMF UE NGAP ID: %d after T3522 timeout", ue.AmfUeNgapId)
+		}
+	})
+}
+
 func (h *Handler) startT3513(ue *context.UEContext) {
 	ue.StopT3513()
 

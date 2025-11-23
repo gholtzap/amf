@@ -64,6 +64,7 @@
 #### 5G MM Timers
 - T3512 (Periodic Registration Update timer)
 - T3513 (Paging timer with retransmission)
+- T3522 (Deregistration timer with retransmission)
 - T3540 (Deregistration request timer with retransmission)
 - T3550 (Registration Accept timer with retransmission)
 - T3560 (Authentication Request timer with retransmission)
@@ -160,7 +161,7 @@
 - NAS transport reject
 
 #### 5G MM Timers
-- T3502, T3510, T3511, T3516, T3517, T3519, T3520, T3521, T3522, T3525, T3555
+- T3502, T3510, T3511, T3516, T3517, T3519, T3520, T3521, T3525, T3555
 
 ### NAS SM Procedures
 - PDU Session Authentication
