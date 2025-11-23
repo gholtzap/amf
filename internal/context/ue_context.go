@@ -56,6 +56,7 @@ type UEContext struct {
 	T3502 *time.Timer // Deregistration attempt timer
 	T3512 *time.Timer // Periodic registration update timer
 	T3513 *time.Timer // Paging timer
+	T3517 *time.Timer // Service Accept timer
 	T3522 *time.Timer // Deregistration timer
 	T3540 *time.Timer // Deregistration request timer
 	T3550 *time.Timer // Registration Accept timer
@@ -72,12 +73,16 @@ type UEContext struct {
 	T3570Counter int
 	T3540Counter int
 	T3513Counter int
+	T3517Counter int
 	T3522Counter int
 
 	// Deregistration request state for T3540 retransmission
 	DeregType              uint8
 	DeregCause             uint8
 	DeregReregRequired     bool
+
+	// Service Accept state for T3517 retransmission
+	ActivePduSessions      []uint8
 
 	// Re-authentication state
 	IsReAuthenticating bool
@@ -316,6 +321,11 @@ func (ue *UEContext) StopT3555() {
 	ue.T3555Counter = 0
 }
 
+func (ue *UEContext) StopT3517() {
+	ue.StopTimer(&ue.T3517)
+	ue.T3517Counter = 0
+}
+
 func (ue *UEContext) StopAllTimers() {
 	ue.StopT3550()
 	ue.StopT3555()
@@ -325,6 +335,7 @@ func (ue *UEContext) StopAllTimers() {
 	ue.StopT3540()
 	ue.StopT3512()
 	ue.StopT3513()
+	ue.StopT3517()
 	ue.StopT3522()
 	ue.StopTimer(&ue.T3502)
 }

@@ -92,6 +92,11 @@
       "expireTime": 6,
       "maxRetryTimes": 4
     },
+    "t3517": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
     "t3522": {
       "enable": true,
       "expireTime": 6,

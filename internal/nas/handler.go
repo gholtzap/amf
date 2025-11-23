@@ -739,6 +739,8 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 func (h *Handler) SendServiceAccept(ue *context.UEContext, activePduSessions []uint8) error {
 	logger.NasLog.Infof("Sending Service Accept to UE SUPI: %s", ue.Supi)
 
+	ue.ActivePduSessions = activePduSessions
+
 	msg := &ServiceAcceptMsg{}
 
 	if len(activePduSessions) > 0 {
@@ -762,7 +764,12 @@ func (h *Handler) SendServiceAccept(ue *context.UEContext, activePduSessions []u
 		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
 	}
 
-	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+	if err := h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData); err != nil {
+		return err
+	}
+
+	h.startT3517(ue)
+	return nil
 }
 
 func (h *Handler) SendServiceReject(ue *context.UEContext, cause uint8) error {
@@ -1707,6 +1714,33 @@ func (h *Handler) startT3513(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3517(ue *context.UEContext) {
+	ue.StopT3517()
+
+	timerConfig := getTimerConfig("T3517")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3517Counter++
+	logger.NasLog.Infof("Starting T3517 timer (attempt %d/%d) for UE: %s",
+		ue.T3517Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3517 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3517 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3517Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3517Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Service Accept for UE: %s", ue.Supi)
+			h.SendServiceAccept(ue, ue.ActivePduSessions)
+			h.startT3517(ue)
+		} else {
+			logger.NasLog.Errorf("T3517 max retries reached for UE: %s, service accept failed", ue.Supi)
+			ue.StopT3517()
+		}
+	})
+}
+
 func getTimerConfig(timerName string) *TimerConfig {
 	cfg := factory.GetConfig()
 	if cfg == nil || cfg.Configuration == nil {
@@ -1717,6 +1751,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 	switch timerName {
 	case "T3513":
 		timerValue = cfg.Configuration.T3513
+	case "T3517":
+		timerValue = cfg.Configuration.T3517
 	case "T3522":
 		timerValue = cfg.Configuration.T3522
 	case "T3540":
