@@ -97,6 +97,11 @@
       "expireTime": 6,
       "maxRetryTimes": 4
     },
+    "t3540": {
+      "enable": true,
+      "expireTime": 10,
+      "maxRetryTimes": 4
+    },
     "t3550": {
       "enable": true,
       "expireTime": 6,
@@ -108,6 +113,11 @@
       "maxRetryTimes": 4
     },
     "t3565": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3570": {
       "enable": true,
       "expireTime": 6,
       "maxRetryTimes": 4

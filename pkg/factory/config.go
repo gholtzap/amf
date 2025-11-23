@@ -36,9 +36,11 @@ type Configuration struct {
 	Non3gppDeregistrationTimerValue int           `json:"non3gppDeregistrationTimerValue"`
 	T3513                           *TimerValue   `json:"t3513"`
 	T3522                           *TimerValue   `json:"t3522"`
+	T3540                           *TimerValue   `json:"t3540"`
 	T3550                           *TimerValue   `json:"t3550"`
 	T3560                           *TimerValue   `json:"t3560"`
 	T3565                           *TimerValue   `json:"t3565"`
+	T3570                           *TimerValue   `json:"t3570"`
 	NrfUri                          string        `json:"nrfUri"`
 	UdmUri                          string        `json:"udmUri"`
 	AusfUri                         string        `json:"ausfUri"`

@@ -8,6 +8,7 @@ import (
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/consumer"
 	"github.com/gavin/amf/internal/logger"
+	"github.com/gavin/amf/pkg/factory"
 )
 
 type Handler struct {
@@ -1506,25 +1507,50 @@ func (h *Handler) startT3513(ue *context.UEContext) {
 }
 
 func getTimerConfig(timerName string) *TimerConfig {
+	cfg := factory.GetConfig()
+	if cfg == nil || cfg.Configuration == nil {
+		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
+	}
+
+	var timerValue *factory.TimerValue
 	switch timerName {
-	case "T3550":
-		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
-	case "T3560":
-		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
-	case "T3565":
-		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
-	case "T3570":
-		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
-	case "T3540":
-		return &TimerConfig{Enable: true, ExpireTime: 10, MaxRetryTimes: 4}
 	case "T3513":
-		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+		timerValue = cfg.Configuration.T3513
+	case "T3522":
+		timerValue = cfg.Configuration.T3522
+	case "T3540":
+		timerValue = cfg.Configuration.T3540
+	case "T3550":
+		timerValue = cfg.Configuration.T3550
+	case "T3560":
+		timerValue = cfg.Configuration.T3560
+	case "T3565":
+		timerValue = cfg.Configuration.T3565
+	case "T3570":
+		timerValue = cfg.Configuration.T3570
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
+	}
+
+	if timerValue == nil {
+		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
+	}
+
+	return &TimerConfig{
+		Enable:        timerValue.Enable,
+		ExpireTime:    timerValue.ExpireTime,
+		MaxRetryTimes: timerValue.MaxRetryTimes,
 	}
 }
 
 func getT3512Value() int {
+	cfg := factory.GetConfig()
+	if cfg == nil || cfg.Configuration == nil {
+		return 3600
+	}
+	if cfg.Configuration.T3512Value > 0 {
+		return cfg.Configuration.T3512Value
+	}
 	return 3600
 }
 
