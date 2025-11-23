@@ -30,6 +30,7 @@ type Configuration struct {
 	NfServices                      []NfService   `json:"nfServices"`
 	Security                        *Security     `json:"security"`
 	NetworkName                     *NetworkName  `json:"networkName"`
+	TimeZone                        *TimeZone     `json:"timeZone"`
 	T3502Value                      int           `json:"t3502Value"`
 	T3512Value                      int           `json:"t3512Value"`
 	Non3gppDeregistrationTimerValue int           `json:"non3gppDeregistrationTimerValue"`
@@ -100,6 +101,11 @@ type Security struct {
 type NetworkName struct {
 	Full  string `json:"full"`
 	Short string `json:"short"`
+}
+
+type TimeZone struct {
+	TimeZoneOffsetMinutes int  `json:"timeZoneOffsetMinutes"`
+	DaylightSavingTime    int  `json:"daylightSavingTime"`
 }
 
 type TimerValue struct {

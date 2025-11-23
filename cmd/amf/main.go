@@ -95,6 +95,13 @@ func main() {
 		amfContext.PlmnSupportList = append(amfContext.PlmnSupportList, ps)
 	}
 
+	if config.Configuration.TimeZone != nil {
+		amfContext.TimeZoneOffsetMinutes = config.Configuration.TimeZone.TimeZoneOffsetMinutes
+		amfContext.DaylightSavingTime = config.Configuration.TimeZone.DaylightSavingTime
+		logger.MainLog.Infof("TimeZone configured: offset=%d minutes, DST=%d",
+			amfContext.TimeZoneOffsetMinutes, amfContext.DaylightSavingTime)
+	}
+
 	nasHandler := nas.NewHandler(amfContext)
 	logger.MainLog.Info("NAS handler initialized")
 

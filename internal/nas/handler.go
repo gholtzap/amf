@@ -1147,6 +1147,16 @@ func (h *Handler) SendConfigurationUpdateCommand(ue *context.UEContext, newGuti 
 		Guti:                          EncodeGutiMobileIdentity(newGuti),
 	}
 
+	if h.amfContext.TimeZoneOffsetMinutes != 0 || h.amfContext.DaylightSavingTime != 0 {
+		msg.LocalTimeZone = EncodeLocalTimeZone(h.amfContext.TimeZoneOffsetMinutes)
+		logger.NasLog.Infof("Including NITZ Local Time Zone in Configuration Update")
+	}
+
+	if h.amfContext.DaylightSavingTime > 0 {
+		msg.NetworkDaylightSavingTime = EncodeNetworkDaylightSavingTime(h.amfContext.DaylightSavingTime)
+		logger.NasLog.Infof("Including NITZ Daylight Saving Time in Configuration Update")
+	}
+
 	payload := EncodeConfigurationUpdateCommand(msg)
 
 	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeConfigurationUpdateCommand, payload,

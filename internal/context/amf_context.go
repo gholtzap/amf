@@ -57,6 +57,9 @@ type AMFContext struct {
 	IsOverloaded   bool
 	OverloadAction int
 
+	TimeZoneOffsetMinutes int
+	DaylightSavingTime    int
+
 	mu sync.RWMutex
 }
 

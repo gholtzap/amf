@@ -816,6 +816,27 @@ func EncodeConfigurationUpdateCommand(msg *ConfigurationUpdateCommandMsg) []byte
 	return payload
 }
 
+func EncodeLocalTimeZone(offsetMinutes int) []byte {
+	quarters := offsetMinutes / 15
+
+	absQuarters := quarters
+	sign := byte(0)
+	if quarters < 0 {
+		sign = 0x08
+		absQuarters = -quarters
+	}
+
+	value := byte(absQuarters & 0x7F)
+	return []byte{value | sign}
+}
+
+func EncodeNetworkDaylightSavingTime(dstValue int) []byte {
+	if dstValue < 0 || dstValue > 2 {
+		dstValue = 0
+	}
+	return []byte{byte(len([]byte{byte(dstValue)})), byte(dstValue)}
+}
+
 func DecodeConfigurationUpdateComplete(payload []byte) (*ConfigurationUpdateCompleteMsg, error) {
 	msg := &ConfigurationUpdateCompleteMsg{}
 	return msg, nil
