@@ -1565,3 +1565,54 @@ func (h *Handler) SendLocationReportingControl(ue *context.UEContext, requestTyp
 
 	return nil
 }
+
+func (h *Handler) SendCellTrafficTrace(ranContext *context.RANContext, nrcgi *NRCGI, traceReference []byte, traceDepth int, traceCollectionEntityIP []byte) error {
+	logger.NgapLog.Info("Sending Cell Traffic Trace")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	ngranTraceID := make([]byte, 8)
+	if len(nrcgi.PLMNIdentity) >= 3 {
+		copy(ngranTraceID[:3], nrcgi.PLMNIdentity[:3])
+	}
+	if len(traceReference) > 0 {
+		copy(ngranTraceID[3:], traceReference)
+	}
+
+	traceActivation := encodeTraceActivation(ngranTraceID, traceDepth, traceCollectionEntityIP)
+
+	nrcgiBytes := make([]byte, 0)
+	nrcgiBytes = append(nrcgiBytes, nrcgi.PLMNIdentity...)
+	nrcgiBytes = append(nrcgiBytes, nrcgi.NRCellID...)
+
+	ies := []ProtocolIE{
+		{
+			Id:          ProtocolIEIDNGRANCGI,
+			Criticality: CriticalityReject,
+			Value:       nrcgiBytes,
+		},
+		{
+			Id:          ProtocolIEIDTraceActivation,
+			Criticality: CriticalityIgnore,
+			Value:       traceActivation,
+		},
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeCellTrafficTrace,
+		Criticality:   CriticalityIgnore,
+		IEs:           ies,
+	}
+
+	if err := h.server.SendMessage(ranContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send Cell Traffic Trace: %w", err)
+	}
+
+	logger.NgapLog.Infof("Cell Traffic Trace sent to RAN %s, Cell ID=%v, Trace Depth=%d",
+		ranContext.RanNodeName, nrcgi.NRCellID, traceDepth)
+
+	return nil
+}

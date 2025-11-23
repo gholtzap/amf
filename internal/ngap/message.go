@@ -30,6 +30,7 @@ const (
 	ProcedureCodeWriteReplaceWarning       = 34
 	ProcedureCodeLocationReportingControl  = 9
 	ProcedureCodeLocationReport            = 10
+	ProcedureCodeCellTrafficTrace          = 5
 )
 
 const (
@@ -111,6 +112,7 @@ const (
 	ProtocolIEIDConcurrentWarningMessageIndicator = 18
 	ProtocolIEIDLocationReportingRequestType  = 64
 	ProtocolIEIDLocationReportingReferenceID  = 65
+	ProtocolIEIDNGRANCGI                      = 67
 )
 
 type GlobalRANNodeID struct {
