@@ -141,6 +141,8 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return nil
 	case ProcedureCodeHandoverNotification:
 		return s.handler.HandleHandoverNotify(ranContext, pdu)
+	case ProcedureCodeRANCPRelocationIndication:
+		return s.handler.HandleRANCPRelocationIndication(ranContext, pdu)
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil

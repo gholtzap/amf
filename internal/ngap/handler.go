@@ -1831,6 +1831,73 @@ func (h *Handler) HandleHandoverNotify(ranContext *context.RANContext, pdu *NGAP
 	return nil
 }
 
+func (h *Handler) HandleRANCPRelocationIndication(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling RAN CP Relocation Indication")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var userLocationInfo *UserLocationInformation
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDUserLocationInformation:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 14 {
+				userLocationInfo = &UserLocationInformation{
+					NRCGIPresent: true,
+					NRCGI: &NRCGI{
+						PLMNIdentity: data[:3],
+						NRCellID:     data[3:8],
+					},
+					TAI: &TAI{
+						PLMNIdentity: data[8:11],
+						TAC:          data[11:14],
+					},
+				}
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	logger.NgapLog.Infof("RAN CP Relocation Indication received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d", amfUeNgapId, ranUeNgapId)
+
+	if userLocationInfo != nil && userLocationInfo.TAI != nil {
+		ue.Tai = context.Tai{
+			PlmnId: context.PlmnId{
+				Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
+				Mnc: "01",
+			},
+			Tac: string(userLocationInfo.TAI.TAC),
+		}
+		logger.NgapLog.Infof("Updated UE location after RAN CP relocation: TAC=%s", ue.Tai.Tac)
+	}
+
+	oldRanContext := ue.RanContext
+	if oldRanContext != nil && oldRanContext != ranContext {
+		oldRanContext.RemoveUE(ue.RanUeNgapId)
+		logger.NgapLog.Infof("Removed UE from old RAN context")
+	}
+
+	ue.RanContext = ranContext
+	ue.RanUeNgapId = ranUeNgapId
+	ranContext.AddUE(ranUeNgapId, ue)
+
+	logger.NgapLog.Infof("RAN CP relocation completed successfully for AMF UE NGAP ID=%d", amfUeNgapId)
+
+	return nil
+}
+
 func parsePDUSessionResourceListHORqd(data []byte) []PDUSessionResourceItemHORqd {
 	items := []PDUSessionResourceItemHORqd{}
 

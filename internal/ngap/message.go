@@ -32,6 +32,7 @@ const (
 	ProcedureCodeLocationReportingControl  = 9
 	ProcedureCodeLocationReport            = 10
 	ProcedureCodeCellTrafficTrace          = 5
+	ProcedureCodeRANCPRelocationIndication = 33
 )
 
 const (

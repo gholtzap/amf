@@ -28,6 +28,7 @@
 - Handover Request/Acknowledge
 - Handover Command
 - Handover Notify
+- RAN CP Relocation Indication
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -119,9 +120,6 @@
 - TAI tracking
 
 ## NOT IMPLEMENTED FEATURES
-
-### NGAP Procedures
-- RAN CP Relocation Indication
 
 ### NAS MM Procedures
 
@@ -231,11 +229,3 @@
 - AMF status subscription persistence
 - Backup/restore procedures
 - Multi-instance synchronization
-
-### Testing/Observability
-- Unit tests
-- Integration tests
-- Metrics export
-- Distributed tracing
-- Performance monitoring
-- Alarming
