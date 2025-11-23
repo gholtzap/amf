@@ -57,6 +57,7 @@
 - Deregistration (UE-initiated and Network-initiated)
 - Deregistration with re-registration required
 - Configuration Update Command/Complete
+- Generic UE Configuration Update
 - GUTI reallocation
 - Service area list updates
 - NITZ (Network Identity and Time Zone)
@@ -148,8 +149,6 @@
 
 #### Authentication
 - EAP-AKA' authentication
-
-#### Generic UE Configuration Update
 
 #### Mobility
 - Intra-AMF mobility (N2 handover)

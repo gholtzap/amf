@@ -42,6 +42,8 @@ const (
 	MsgTypeSecurityModeReject         = 0x5f
 	MsgTypeULNASTransport             = 0x67
 	MsgTypeDLNASTransport             = 0x68
+	MsgTypeGenericUEConfigurationUpdateCommand  = 0xd0
+	MsgTypeGenericUEConfigurationUpdateComplete = 0xd1
 )
 
 const (
@@ -225,6 +227,18 @@ type ConfigurationUpdateCommandMsg struct {
 }
 
 type ConfigurationUpdateCompleteMsg struct {
+}
+
+type GenericUEConfigurationUpdateCommandMsg struct {
+	GenericUEConfigurationUpdateIndication uint8
+	UERadioCapabilityID                    []byte
+	UERadioCapabilityIDDeletionIndication  uint8
+	NetworkSlicingIndication               uint8
+	OperatorDefinedAccessCategoryDefinitions []byte
+	SMSIndication                          uint8
+}
+
+type GenericUEConfigurationUpdateCompleteMsg struct {
 }
 
 type ServiceRequestMsg struct {
@@ -816,6 +830,42 @@ func EncodeConfigurationUpdateCommand(msg *ConfigurationUpdateCommandMsg) []byte
 	return payload
 }
 
+func EncodeGenericUEConfigurationUpdateCommand(msg *GenericUEConfigurationUpdateCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, 0xd0|(msg.GenericUEConfigurationUpdateIndication&0x0f))
+
+	if len(msg.UERadioCapabilityID) > 0 {
+		payload = append(payload, 0x67)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.UERadioCapabilityID)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.UERadioCapabilityID...)
+	}
+
+	if msg.UERadioCapabilityIDDeletionIndication > 0 {
+		payload = append(payload, 0xa0|(msg.UERadioCapabilityIDDeletionIndication&0x0f))
+	}
+
+	if msg.NetworkSlicingIndication > 0 {
+		payload = append(payload, 0x90|(msg.NetworkSlicingIndication&0x0f))
+	}
+
+	if len(msg.OperatorDefinedAccessCategoryDefinitions) > 0 {
+		payload = append(payload, 0x76)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.OperatorDefinedAccessCategoryDefinitions)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.OperatorDefinedAccessCategoryDefinitions...)
+	}
+
+	if msg.SMSIndication > 0 {
+		payload = append(payload, 0xf0|(msg.SMSIndication&0x0f))
+	}
+
+	return payload
+}
+
 func EncodeLocalTimeZone(offsetMinutes int) []byte {
 	quarters := offsetMinutes / 15
 
@@ -904,6 +954,11 @@ func EncodeServiceAreaList(taiList []context.Tai) []byte {
 
 func DecodeConfigurationUpdateComplete(payload []byte) (*ConfigurationUpdateCompleteMsg, error) {
 	msg := &ConfigurationUpdateCompleteMsg{}
+	return msg, nil
+}
+
+func DecodeGenericUEConfigurationUpdateComplete(payload []byte) (*GenericUEConfigurationUpdateCompleteMsg, error) {
+	msg := &GenericUEConfigurationUpdateCompleteMsg{}
 	return msg, nil
 }
 

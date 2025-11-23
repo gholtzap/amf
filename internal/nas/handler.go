@@ -74,6 +74,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return nil
 	case MsgTypeConfigurationUpdateComplete:
 		return h.HandleConfigurationUpdateComplete(ue, pdu.Payload)
+	case MsgTypeGenericUEConfigurationUpdateComplete:
+		return h.HandleGenericUEConfigurationUpdateComplete(ue, pdu.Payload)
 	case MsgTypeULNASTransport:
 		return h.HandleULNASTransport(ue, pdu.Payload)
 	default:
@@ -1251,6 +1253,42 @@ func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, paylo
 	}
 
 	logger.NasLog.Infof("Configuration Update Complete processed successfully for UE: %s", ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) SendGenericUEConfigurationUpdate(ue *context.UEContext, indication uint8) error {
+	logger.NasLog.Infof("Sending Generic UE Configuration Update to UE")
+
+	msg := &GenericUEConfigurationUpdateCommandMsg{
+		GenericUEConfigurationUpdateIndication: indication,
+	}
+
+	payload := EncodeGenericUEConfigurationUpdateCommand(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeGenericUEConfigurationUpdateCommand, payload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleGenericUEConfigurationUpdateComplete(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Generic UE Configuration Update Complete for UE SUPI: %s", ue.Supi)
+
+	_, err := DecodeGenericUEConfigurationUpdateComplete(payload)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to decode Generic UE Configuration Update Complete: %v", err)
+		return err
+	}
+
+	logger.NasLog.Infof("Generic UE Configuration Update Complete processed successfully for UE: %s", ue.Supi)
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
