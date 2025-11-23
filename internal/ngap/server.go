@@ -107,6 +107,8 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return s.handler.HandlePDUSessionResourceSetupResponse(ranContext, pdu)
 	case ProcedureCodeUEContextRelease:
 		return s.handler.HandleUEContextReleaseRequest(ranContext, pdu)
+	case ProcedureCodePathSwitchRequest:
+		return s.handler.HandlePathSwitchRequest(ranContext, pdu)
 	case ProcedureCodeNGReset:
 		return s.handler.HandleNGReset(ranContext, pdu)
 	case ProcedureCodeErrorIndication:

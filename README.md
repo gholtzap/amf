@@ -9,6 +9,7 @@
 - Initial Context Setup Response
 - PDU Session Resource Setup Request/Response
 - UE Context Release Request
+- Path Switch Request
 - RAN context management
 - Paging
 - NG Reset
@@ -115,7 +116,6 @@
 
 ### NGAP Procedures
 - Handover procedures (Handover Request/Notify/Command/Required)
-- Path Switch Request
 - N2 Handover Resource Allocation
 - Location Reporting
 - RAN CP Relocation Indication

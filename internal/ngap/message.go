@@ -17,6 +17,7 @@ const (
 	ProcedureCodePaging                    = 8
 	ProcedureCodeHandoverPreparation       = 0
 	ProcedureCodeHandoverResourceAllocation = 1
+	ProcedureCodePathSwitchRequest         = 2
 	ProcedureCodeErrorIndication           = 11
 	ProcedureCodeOverloadStart             = 24
 	ProcedureCodeOverloadStop              = 25
@@ -69,6 +70,7 @@ const (
 	ProtocolIEIDRANNodeName                   = 82
 	ProtocolIEIDPDUSessionResourceSetupListCxtReq = 74
 	ProtocolIEIDPDUSessionResourceSetupListSUReq  = 74
+	ProtocolIEIDPDUSessionResourceToBeSwitchedList = 75
 	ProtocolIEIDAllowedNSSAI                  = 0
 	ProtocolIEIDUESecurityCapabilities        = 119
 	ProtocolIEIDSecurityKey                   = 94

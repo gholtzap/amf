@@ -1349,3 +1349,114 @@ func encodeWarningAreaList(warningAreaList *WarningAreaList) []byte {
 
 	return result
 }
+
+func (h *Handler) HandlePathSwitchRequest(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Path Switch Request")
+
+	var ranUeNgapId int64
+	var sourceAmfUeNgapId int64
+	var userLocationInfo *UserLocationInformation
+	var pduSessionResourceList []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				sourceAmfUeNgapId = val
+			}
+		case ProtocolIEIDUserLocationInformation:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 14 {
+				userLocationInfo = &UserLocationInformation{
+					NRCGIPresent: true,
+					NRCGI: &NRCGI{
+						PLMNIdentity: data[:3],
+						NRCellID:     data[3:8],
+					},
+					TAI: &TAI{
+						PLMNIdentity: data[8:11],
+						TAC:          data[11:14],
+					},
+				}
+			}
+		case ProtocolIEIDPDUSessionResourceToBeSwitchedList:
+			if data, ok := ie.Value.([]byte); ok {
+				pduSessionResourceList = data
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(sourceAmfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", sourceAmfUeNgapId)
+	}
+
+	oldRanContext := ue.RanContext
+	if oldRanContext != nil {
+		oldRanContext.RemoveUE(ue.RanUeNgapId)
+	}
+
+	ue.RanContext = ranContext
+	ue.RanUeNgapId = ranUeNgapId
+	ranContext.AddUE(ranUeNgapId, ue)
+
+	if userLocationInfo != nil && userLocationInfo.TAI != nil {
+		ue.Tai = context.Tai{
+			PlmnId: context.PlmnId{
+				Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
+				Mnc: "01",
+			},
+			Tac: string(userLocationInfo.TAI.TAC),
+		}
+		logger.NgapLog.Infof("Updated UE location: TAI=%+v", ue.Tai)
+	}
+
+	logger.NgapLog.Infof("Path Switch Request: AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, PDU Session Resource List length=%d",
+		sourceAmfUeNgapId, ranUeNgapId, len(pduSessionResourceList))
+
+	return h.SendPathSwitchRequestAcknowledge(ranContext, sourceAmfUeNgapId, ranUeNgapId, pduSessionResourceList)
+}
+
+func (h *Handler) SendPathSwitchRequestAcknowledge(ranContext *context.RANContext, amfUeNgapId int64, ranUeNgapId int64, pduSessionResourceList []byte) error {
+	logger.NgapLog.Info("Sending Path Switch Request Acknowledge")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("invalid RAN context")
+	}
+
+	ies := []ProtocolIE{
+		{
+			Id:          ProtocolIEIDAMFUENGAPID,
+			Criticality: CriticalityReject,
+			Value:       amfUeNgapId,
+		},
+		{
+			Id:          ProtocolIEIDRANUENGAPID,
+			Criticality: CriticalityReject,
+			Value:       ranUeNgapId,
+		},
+	}
+
+	if len(pduSessionResourceList) > 0 {
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDPDUSessionResourceToBeSwitchedList,
+			Criticality: CriticalityIgnore,
+			Value:       pduSessionResourceList,
+		})
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeSuccessfulOutcome,
+		ProcedureCode: ProcedureCodePathSwitchRequest,
+		Criticality:   CriticalityReject,
+		IEs:           ies,
+	}
+
+	logger.NgapLog.Infof("Path Switch Request Acknowledge sent to RAN %s for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d",
+		ranContext.RanNodeName, amfUeNgapId, ranUeNgapId)
+
+	return h.server.SendMessage(ranContext.Conn, pdu)
+}
