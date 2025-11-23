@@ -20,6 +20,7 @@
 - UE TNLA Binding Release
 - Trace Start
 - Deactivate Trace
+- Write-Replace Warning
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -116,7 +117,6 @@
 - Handover procedures (Handover Request/Notify/Command/Required)
 - Path Switch Request
 - N2 Handover Resource Allocation
-- Write-Replace Warning
 - Location Reporting
 - RAN CP Relocation Indication
 - Cell Traffic Trace

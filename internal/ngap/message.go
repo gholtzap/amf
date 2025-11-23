@@ -26,6 +26,7 @@ const (
 	ProcedureCodeUETNLABindingReleaseRequest = 49
 	ProcedureCodeTraceStart                = 13
 	ProcedureCodeDeactivateTrace           = 23
+	ProcedureCodeWriteReplaceWarning       = 34
 )
 
 const (
@@ -94,6 +95,16 @@ const (
 	ProtocolIEIDUERadioCapabilityForPaging    = 117
 	ProtocolIEIDTraceActivation               = 112
 	ProtocolIEIDTraceReference                = 113
+	ProtocolIEIDMessageIdentifier             = 111
+	ProtocolIEIDSerialNumber                  = 92
+	ProtocolIEIDWarningAreaList               = 128
+	ProtocolIEIDRepetitionPeriod              = 88
+	ProtocolIEIDNumberOfBroadcastsRequested   = 63
+	ProtocolIEIDWarningType                   = 129
+	ProtocolIEIDWarningSecurityInfo           = 130
+	ProtocolIEIDDataCodingScheme              = 20
+	ProtocolIEIDWarningMessageContents        = 131
+	ProtocolIEIDConcurrentWarningMessageIndicator = 18
 )
 
 type GlobalRANNodeID struct {
@@ -219,6 +230,14 @@ type TraceReference struct {
 	PLMNIdentity []byte
 	TraceID      []byte
 }
+
+type WarningAreaList struct {
+	CellIDList []NRCGI
+	TAIList    []TAI
+	EmergencyAreaIDList [][]byte
+}
+
+type WarningType []byte
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

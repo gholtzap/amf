@@ -1192,3 +1192,160 @@ func encodeTraceActivation(ngranTraceID []byte, traceDepth int, traceCollectionE
 
 	return result
 }
+
+func (h *Handler) SendWriteReplaceWarningRequest(ranContext *context.RANContext, messageID uint16, serialNumber uint32, warningAreaList *WarningAreaList, repetitionPeriod uint32, numBroadcasts uint32, warningType []byte, warningMessage []byte, dataCodingScheme uint8) error {
+	logger.NgapLog.Info("Sending Write-Replace Warning Request")
+
+	if ranContext == nil || ranContext.Conn == nil {
+		return fmt.Errorf("RAN has no connection")
+	}
+
+	msgIDBytes := make([]byte, 2)
+	msgIDBytes[0] = byte(messageID >> 8)
+	msgIDBytes[1] = byte(messageID)
+
+	serialBytes := make([]byte, 2)
+	serialBytes[0] = byte(serialNumber >> 8)
+	serialBytes[1] = byte(serialNumber)
+
+	ies := []ProtocolIE{
+		{
+			Id:          ProtocolIEIDMessageIdentifier,
+			Criticality: CriticalityReject,
+			Value:       msgIDBytes,
+		},
+		{
+			Id:          ProtocolIEIDSerialNumber,
+			Criticality: CriticalityReject,
+			Value:       serialBytes,
+		},
+	}
+
+	if warningAreaList != nil {
+		warningAreaBytes := encodeWarningAreaList(warningAreaList)
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDWarningAreaList,
+			Criticality: CriticalityIgnore,
+			Value:       warningAreaBytes,
+		})
+	}
+
+	if repetitionPeriod > 0 {
+		repPeriodBytes := make([]byte, 4)
+		repPeriodBytes[0] = byte(repetitionPeriod >> 24)
+		repPeriodBytes[1] = byte(repetitionPeriod >> 16)
+		repPeriodBytes[2] = byte(repetitionPeriod >> 8)
+		repPeriodBytes[3] = byte(repetitionPeriod)
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDRepetitionPeriod,
+			Criticality: CriticalityReject,
+			Value:       repPeriodBytes,
+		})
+	}
+
+	if numBroadcasts > 0 {
+		numBroadcastsBytes := make([]byte, 2)
+		numBroadcastsBytes[0] = byte(numBroadcasts >> 8)
+		numBroadcastsBytes[1] = byte(numBroadcasts)
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDNumberOfBroadcastsRequested,
+			Criticality: CriticalityReject,
+			Value:       numBroadcastsBytes,
+		})
+	}
+
+	if len(warningType) > 0 {
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDWarningType,
+			Criticality: CriticalityIgnore,
+			Value:       warningType,
+		})
+	}
+
+	if len(warningMessage) > 0 {
+		dcsBytes := []byte{dataCodingScheme}
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDDataCodingScheme,
+			Criticality: CriticalityIgnore,
+			Value:       dcsBytes,
+		})
+
+		ies = append(ies, ProtocolIE{
+			Id:          ProtocolIEIDWarningMessageContents,
+			Criticality: CriticalityIgnore,
+			Value:       warningMessage,
+		})
+	}
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeWriteReplaceWarning,
+		Criticality:   CriticalityReject,
+		IEs:           ies,
+	}
+
+	if err := h.server.SendMessage(ranContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send Write-Replace Warning Request: %w", err)
+	}
+
+	logger.NgapLog.Infof("Write-Replace Warning Request sent to RAN %s, Message ID=%d, Serial Number=%d",
+		ranContext.RanNodeName, messageID, serialNumber)
+
+	return nil
+}
+
+func (h *Handler) HandleWriteReplaceWarningResponse(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Write-Replace Warning Response")
+
+	var messageID uint16
+	var serialNumber uint32
+	var broadcastCompletedAreaList []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDMessageIdentifier:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 2 {
+				messageID = uint16(data[0])<<8 | uint16(data[1])
+			}
+		case ProtocolIEIDSerialNumber:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 2 {
+				serialNumber = uint32(data[0])<<8 | uint32(data[1])
+			}
+		case 22:
+			if data, ok := ie.Value.([]byte); ok {
+				broadcastCompletedAreaList = data
+			}
+		}
+	}
+
+	logger.NgapLog.Infof("Write-Replace Warning Response received from RAN %s, Message ID=%d, Serial Number=%d, Completed Area List length=%d",
+		ranContext.RanNodeName, messageID, serialNumber, len(broadcastCompletedAreaList))
+
+	return nil
+}
+
+func encodeWarningAreaList(warningAreaList *WarningAreaList) []byte {
+	result := make([]byte, 0)
+
+	if len(warningAreaList.CellIDList) > 0 {
+		for _, nrcgi := range warningAreaList.CellIDList {
+			result = append(result, nrcgi.PLMNIdentity...)
+			result = append(result, nrcgi.NRCellID...)
+		}
+	}
+
+	if len(warningAreaList.TAIList) > 0 {
+		for _, tai := range warningAreaList.TAIList {
+			result = append(result, tai.PLMNIdentity...)
+			result = append(result, tai.TAC...)
+		}
+	}
+
+	if len(warningAreaList.EmergencyAreaIDList) > 0 {
+		for _, eaid := range warningAreaList.EmergencyAreaIDList {
+			result = append(result, eaid...)
+		}
+	}
+
+	return result
+}
