@@ -181,6 +181,13 @@ type RegistrationAcceptMsg struct {
 	EmergencyNumberList   []byte
 }
 
+type RegistrationRejectMsg struct {
+	Cause5GMM             uint8
+	T3502Value            []byte
+	T3346Value            []byte
+	EAPMessage            []byte
+}
+
 type AuthenticationRequestMsg struct {
 	NgKSI                 uint8
 	ABBA                  []byte
@@ -457,6 +464,32 @@ func DecodeGutiMobileIdentity(mobileIdentity []byte) (*context.Guti, error) {
 	}, nil
 }
 
+func EncodeGPRSTimer2(seconds int) []byte {
+	if seconds <= 0 {
+		return nil
+	}
+
+	var unit uint8
+	var value uint8
+
+	if seconds <= 62 {
+		unit = 0x00
+		value = uint8(seconds / 2)
+	} else if seconds <= 1860 {
+		unit = 0x01
+		value = uint8(seconds / 60)
+	} else if seconds <= 11160 {
+		unit = 0x02
+		value = uint8(seconds / 360)
+	} else {
+		unit = 0x02
+		value = 31
+	}
+
+	timerByte := (unit << 5) | (value & 0x1f)
+	return []byte{timerByte}
+}
+
 func EncodeGutiMobileIdentity(guti *context.Guti) []byte {
 	if guti == nil {
 		return nil
@@ -535,6 +568,34 @@ func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
 		payload = append(payload, IEIT3502Value)
 		payload = append(payload, uint8(len(msg.T3502Value)))
 		payload = append(payload, msg.T3502Value...)
+	}
+
+	return payload
+}
+
+func EncodeRegistrationReject(msg *RegistrationRejectMsg) []byte {
+	payload := make([]byte, 0)
+
+	payload = append(payload, msg.Cause5GMM)
+
+	if len(msg.T3502Value) > 0 {
+		payload = append(payload, IEIT3502Value)
+		payload = append(payload, uint8(len(msg.T3502Value)))
+		payload = append(payload, msg.T3502Value...)
+	}
+
+	if len(msg.T3346Value) > 0 {
+		payload = append(payload, 0x5f)
+		payload = append(payload, uint8(len(msg.T3346Value)))
+		payload = append(payload, msg.T3346Value...)
+	}
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, 0x78)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
 	}
 
 	return payload

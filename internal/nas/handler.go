@@ -586,11 +586,19 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 func (h *Handler) SendRegistrationReject(ue *context.UEContext, cause uint8) error {
 	logger.NasLog.Infof("Sending Registration Reject to UE with cause: 0x%02x", cause)
 
+	t3502Seconds := getT3502Value()
+	msg := &RegistrationRejectMsg{
+		Cause5GMM:  cause,
+		T3502Value: EncodeGPRSTimer2(t3502Seconds),
+	}
+
+	payload := EncodeRegistrationReject(msg)
+
 	pdu := &NASPDU{
 		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
 		SecurityHeaderType:    SecurityHeaderTypePlainNAS,
 		MessageType:           MsgTypeRegistrationReject,
-		Payload:               []byte{cause},
+		Payload:               payload,
 	}
 
 	nasData := EncodeNASPDU(pdu)
@@ -1701,6 +1709,17 @@ func getT3512Value() int {
 		return cfg.Configuration.T3512Value
 	}
 	return 3600
+}
+
+func getT3502Value() int {
+	cfg := factory.GetConfig()
+	if cfg == nil || cfg.Configuration == nil {
+		return 720
+	}
+	if cfg.Configuration.T3502Value > 0 {
+		return cfg.Configuration.T3502Value
+	}
+	return 720
 }
 
 type TimerConfig struct {
