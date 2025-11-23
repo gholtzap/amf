@@ -1088,3 +1088,107 @@ func (h *Handler) SendUETNLABindingReleaseRequest(ue *context.UEContext) error {
 
 	return nil
 }
+
+func (h *Handler) SendTraceStart(ue *context.UEContext, traceReference []byte, traceDepth int, traceCollectionEntityIP []byte) error {
+	logger.NgapLog.Info("Sending Trace Start")
+
+	if ue.RanContext == nil || ue.RanContext.Conn == nil {
+		return fmt.Errorf("UE has no RAN connection")
+	}
+
+	ngranTraceID := make([]byte, 8)
+	copy(ngranTraceID[:3], ue.Tai.PlmnId.Mcc[:3])
+	copy(ngranTraceID[3:], traceReference)
+
+	traceActivation := encodeTraceActivation(ngranTraceID, traceDepth, traceCollectionEntityIP)
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeTraceStart,
+		Criticality:   CriticalityIgnore,
+		IEs: []ProtocolIE{
+			{
+				Id:          ProtocolIEIDAMFUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.AmfUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDRANUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.RanUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDTraceActivation,
+				Criticality: CriticalityIgnore,
+				Value:       traceActivation,
+			},
+		},
+	}
+
+	if err := h.server.SendMessage(ue.RanContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send Trace Start: %w", err)
+	}
+
+	logger.NgapLog.Infof("Trace Start sent for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, Trace Depth=%d",
+		ue.AmfUeNgapId, ue.RanUeNgapId, traceDepth)
+
+	return nil
+}
+
+func (h *Handler) SendDeactivateTrace(ue *context.UEContext, traceReference []byte) error {
+	logger.NgapLog.Info("Sending Deactivate Trace")
+
+	if ue.RanContext == nil || ue.RanContext.Conn == nil {
+		return fmt.Errorf("UE has no RAN connection")
+	}
+
+	ngranTraceID := make([]byte, 8)
+	copy(ngranTraceID[:3], ue.Tai.PlmnId.Mcc[:3])
+	copy(ngranTraceID[3:], traceReference)
+
+	pdu := &NGAPPDU{
+		Type:          PDUTypeInitiatingMessage,
+		ProcedureCode: ProcedureCodeDeactivateTrace,
+		Criticality:   CriticalityIgnore,
+		IEs: []ProtocolIE{
+			{
+				Id:          ProtocolIEIDAMFUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.AmfUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDRANUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ue.RanUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDTraceReference,
+				Criticality: CriticalityIgnore,
+				Value:       ngranTraceID,
+			},
+		},
+	}
+
+	if err := h.server.SendMessage(ue.RanContext.Conn, pdu); err != nil {
+		return fmt.Errorf("failed to send Deactivate Trace: %w", err)
+	}
+
+	logger.NgapLog.Infof("Deactivate Trace sent for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d",
+		ue.AmfUeNgapId, ue.RanUeNgapId)
+
+	return nil
+}
+
+func encodeTraceActivation(ngranTraceID []byte, traceDepth int, traceCollectionEntityIP []byte) []byte {
+	result := make([]byte, 0)
+
+	result = append(result, ngranTraceID...)
+
+	result = append(result, 0xFF, 0xFF)
+
+	result = append(result, byte(traceDepth))
+
+	result = append(result, traceCollectionEntityIP...)
+
+	return result
+}

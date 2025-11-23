@@ -24,6 +24,8 @@ const (
 	ProcedureCodeRANConfigurationUpdate    = 40
 	ProcedureCodeUERadioCapabilityInfoIndication = 43
 	ProcedureCodeUETNLABindingReleaseRequest = 49
+	ProcedureCodeTraceStart                = 13
+	ProcedureCodeDeactivateTrace           = 23
 )
 
 const (
@@ -90,6 +92,8 @@ const (
 	ProtocolIEIDAMFTNLAssociationToUpdateList = 7
 	ProtocolIEIDUERadioCapability             = 118
 	ProtocolIEIDUERadioCapabilityForPaging    = 117
+	ProtocolIEIDTraceActivation               = 112
+	ProtocolIEIDTraceReference                = 113
 )
 
 type GlobalRANNodeID struct {
@@ -203,6 +207,18 @@ const (
 	OverloadResponseReject OverloadResponse = 0
 	OverloadResponseAccept OverloadResponse = 1
 )
+
+type TraceActivation struct {
+	NGRANTraceID       []byte
+	InterfacesToTrace  []byte
+	TraceDepth         int
+	TraceCollectionEntityIPAddress []byte
+}
+
+type TraceReference struct {
+	PLMNIdentity []byte
+	TraceID      []byte
+}
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {
 	if len(data) < 4 {

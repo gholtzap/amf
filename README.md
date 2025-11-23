@@ -18,6 +18,8 @@
 - RAN Configuration Update
 - UE Radio Capability Management
 - UE TNLA Binding Release
+- Trace Start
+- Deactivate Trace
 
 ### NAS (N1 Interface) Protocol - MM (Mobility Management)
 
@@ -117,9 +119,7 @@
 - Write-Replace Warning
 - Location Reporting
 - RAN CP Relocation Indication
-- Trace Start/Deactivation
 - Cell Traffic Trace
-- Deactivate Trace
 
 ### NAS MM Procedures
 
