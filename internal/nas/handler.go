@@ -122,6 +122,10 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 
 	if len(regReq.UESecurityCapability) > 0 {
 		ue.UeSecurityCapability = hex.EncodeToString(regReq.UESecurityCapability)
+		if ue.SecurityContext == nil {
+			ue.SecurityContext = &context.SecurityContext{}
+		}
+		ue.SecurityContext.SecurityCapability = ParseUESecurityCapabilities(regReq.UESecurityCapability)
 	}
 
 	ue.RegistrationState = context.RegStateRegistering
@@ -330,8 +334,24 @@ func (h *Handler) HandleAuthenticationResponse(ue *context.UEContext, payload []
 		}
 	}
 
-	ue.SecurityContext.IntegrityAlgorithm = AlgorithmNIA2
-	ue.SecurityContext.CipheringAlgorithm = AlgorithmNEA2
+	amfSupportedEA := []int{AlgorithmNEA0, AlgorithmNEA2}
+	amfSupportedIA := []int{AlgorithmNIA0, AlgorithmNIA2}
+
+	if ue.SecurityContext.SecurityCapability != nil {
+		cipheringAlg, integrityAlg := SelectSecurityAlgorithms(
+			ue.SecurityContext.SecurityCapability,
+			amfSupportedEA,
+			amfSupportedIA,
+		)
+		ue.SecurityContext.CipheringAlgorithm = cipheringAlg
+		ue.SecurityContext.IntegrityAlgorithm = integrityAlg
+		logger.NasLog.Infof("Selected algorithms - Ciphering: NEA%d, Integrity: NIA%d",
+			cipheringAlg, integrityAlg)
+	} else {
+		ue.SecurityContext.IntegrityAlgorithm = AlgorithmNIA2
+		ue.SecurityContext.CipheringAlgorithm = AlgorithmNEA2
+		logger.NasLog.Warnf("No UE security capabilities, using default NIA2/NEA2")
+	}
 
 	if ue.IsReAuthenticating {
 		logger.NasLog.Infof("Re-authentication successful for UE: %s", ue.Supi)

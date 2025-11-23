@@ -254,3 +254,84 @@ func KDF(key []byte, fc []byte, p0 []byte) []byte {
 
 	return mac.Sum(nil)
 }
+
+func ParseUESecurityCapabilities(data []byte) *context.UeSecurityCapability {
+	if len(data) < 2 {
+		return &context.UeSecurityCapability{
+			NrEncryptionAlgs: []int{},
+			NrIntegrityAlgs:  []int{},
+		}
+	}
+
+	capability := &context.UeSecurityCapability{
+		NrEncryptionAlgs:    []int{},
+		NrIntegrityAlgs:     []int{},
+		EutraEncryptionAlgs: []int{},
+		EutraIntegrityAlgs:  []int{},
+	}
+
+	eaByte := data[0]
+	for i := 7; i >= 0; i-- {
+		if (eaByte & (1 << i)) != 0 {
+			capability.NrEncryptionAlgs = append(capability.NrEncryptionAlgs, 7-i)
+		}
+	}
+
+	iaByte := data[1]
+	for i := 7; i >= 0; i-- {
+		if (iaByte & (1 << i)) != 0 {
+			capability.NrIntegrityAlgs = append(capability.NrIntegrityAlgs, 7-i)
+		}
+	}
+
+	if len(data) >= 4 {
+		eutraEaByte := data[2]
+		for i := 7; i >= 0; i-- {
+			if (eutraEaByte & (1 << i)) != 0 {
+				capability.EutraEncryptionAlgs = append(capability.EutraEncryptionAlgs, 7-i)
+			}
+		}
+
+		eutraIaByte := data[3]
+		for i := 7; i >= 0; i-- {
+			if (eutraIaByte & (1 << i)) != 0 {
+				capability.EutraIntegrityAlgs = append(capability.EutraIntegrityAlgs, 7-i)
+			}
+		}
+	}
+
+	return capability
+}
+
+func SelectSecurityAlgorithms(ueCapability *context.UeSecurityCapability, amfSupportedEA []int, amfSupportedIA []int) (cipheringAlg int, integrityAlg int) {
+	cipheringAlg = AlgorithmNEA0
+	integrityAlg = AlgorithmNIA0
+
+	preferenceOrderEA := []int{AlgorithmNEA2, AlgorithmNEA1, AlgorithmNEA3, AlgorithmNEA0}
+	preferenceOrderIA := []int{AlgorithmNIA2, AlgorithmNIA1, AlgorithmNIA3, AlgorithmNIA0}
+
+	for _, preferredEA := range preferenceOrderEA {
+		if contains(amfSupportedEA, preferredEA) && contains(ueCapability.NrEncryptionAlgs, preferredEA) {
+			cipheringAlg = preferredEA
+			break
+		}
+	}
+
+	for _, preferredIA := range preferenceOrderIA {
+		if contains(amfSupportedIA, preferredIA) && contains(ueCapability.NrIntegrityAlgs, preferredIA) {
+			integrityAlg = preferredIA
+			break
+		}
+	}
+
+	return cipheringAlg, integrityAlg
+}
+
+func contains(slice []int, item int) bool {
+	for _, v := range slice {
+		if v == item {
+			return true
+		}
+	}
+	return false
+}

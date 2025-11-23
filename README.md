@@ -48,6 +48,8 @@
 - Key derivation (Kseaf → Kamf → KnasEnc/KnasInt)
 - MAC calculation and verification
 - Security context management
+- Algorithm negotiation
+- UE security capabilities matching
 
 #### Other MM Procedures
 - Service Request/Accept
@@ -223,10 +225,8 @@
 ### Security Features (Not Implemented)
 - NIA1/NIA3 integrity algorithms
 - NEA0/NEA1/NEA3 ciphering algorithms
-- Algorithm negotiation
 - Security context synchronization
 - Null security
-- UE security capabilities matching
 - Horizontal key derivation
 - Inter-system key derivation
 
