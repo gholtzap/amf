@@ -41,6 +41,7 @@
 
 #### Security
 - 5G-AKA authentication (via AUSF)
+- Re-authentication
 - NAS Security Mode Command/Complete
 - NIA2 integrity protection
 - NEA2 encryption
@@ -133,7 +134,6 @@
 
 #### Authentication
 - EAP-AKA' authentication
-- Re-authentication
 
 #### Generic UE Configuration Update
 - NITZ (Network Identity and Time Zone)

@@ -282,23 +282,55 @@ func (h *Handler) HandleAuthenticationResponse(ue *context.UEContext, payload []
 	confirmResp, err := ausfClient.ConfirmAuthentication(ue.AuthenticationCtxId, resHex)
 	if err != nil {
 		logger.NasLog.Errorf("Authentication confirmation failed: %v", err)
+		if ue.IsReAuthenticating && ue.PreviousSecurityContext != nil {
+			logger.NasLog.Infof("Restoring previous security context due to re-authentication failure")
+			ue.SecurityContext = ue.PreviousSecurityContext
+			ue.IsReAuthenticating = false
+			ue.PreviousSecurityContext = nil
+		}
 		return h.SendAuthenticationReject(ue)
 	}
 
 	if confirmResp.AuthResult != "AUTHENTICATION_SUCCESS" {
 		logger.NasLog.Errorf("Authentication failed: %s", confirmResp.AuthResult)
+		if ue.IsReAuthenticating && ue.PreviousSecurityContext != nil {
+			logger.NasLog.Infof("Restoring previous security context due to re-authentication failure")
+			ue.SecurityContext = ue.PreviousSecurityContext
+			ue.IsReAuthenticating = false
+			ue.PreviousSecurityContext = nil
+		}
 		return h.SendAuthenticationReject(ue)
 	}
 
 	if confirmResp.Kseaf != "" {
 		kseaf, _ := hex.DecodeString(confirmResp.Kseaf)
 		if err := DeriveNASKeys(ue, kseaf); err != nil {
+			if ue.IsReAuthenticating && ue.PreviousSecurityContext != nil {
+				logger.NasLog.Infof("Restoring previous security context due to key derivation failure")
+				ue.SecurityContext = ue.PreviousSecurityContext
+				ue.IsReAuthenticating = false
+				ue.PreviousSecurityContext = nil
+			}
 			return fmt.Errorf("failed to derive NAS keys: %v", err)
 		}
 	}
 
 	ue.SecurityContext.IntegrityAlgorithm = AlgorithmNIA2
 	ue.SecurityContext.CipheringAlgorithm = AlgorithmNEA2
+
+	if ue.IsReAuthenticating {
+		logger.NasLog.Infof("Re-authentication successful for UE: %s", ue.Supi)
+		ue.IsReAuthenticating = false
+		ue.PreviousSecurityContext = nil
+		ue.ULCount = 0
+		ue.DLCount = 0
+
+		if err := h.amfContext.PersistUEContext(ue); err != nil {
+			logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+		}
+
+		return h.SendSecurityModeCommand(ue)
+	}
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
@@ -336,6 +368,75 @@ func (h *Handler) HandleAuthenticationFailure(ue *context.UEContext, payload []b
 	}
 
 	return h.SendAuthenticationReject(ue)
+}
+
+func (h *Handler) InitiateReAuthentication(ue *context.UEContext) error {
+	logger.NasLog.Infof("Initiating re-authentication for UE SUPI: %s", ue.Supi)
+
+	if ue.RmState != context.RmRegistered {
+		return fmt.Errorf("UE not in RM-REGISTERED state, cannot re-authenticate")
+	}
+
+	if ue.SecurityContext != nil && ue.SecurityContext.Activated {
+		ue.PreviousSecurityContext = &context.SecurityContext{
+			Kseaf:              make([]byte, len(ue.SecurityContext.Kseaf)),
+			Kamf:               make([]byte, len(ue.SecurityContext.Kamf)),
+			KnasInt:            make([]byte, len(ue.SecurityContext.KnasInt)),
+			KnasEnc:            make([]byte, len(ue.SecurityContext.KnasEnc)),
+			NgKsi:              ue.SecurityContext.NgKsi,
+			IntegrityAlg:       ue.SecurityContext.IntegrityAlg,
+			CipheringAlg:       ue.SecurityContext.CipheringAlg,
+			IntegrityAlgorithm: ue.SecurityContext.IntegrityAlgorithm,
+			CipheringAlgorithm: ue.SecurityContext.CipheringAlgorithm,
+			Activated:          ue.SecurityContext.Activated,
+		}
+		copy(ue.PreviousSecurityContext.Kseaf, ue.SecurityContext.Kseaf)
+		copy(ue.PreviousSecurityContext.Kamf, ue.SecurityContext.Kamf)
+		copy(ue.PreviousSecurityContext.KnasInt, ue.SecurityContext.KnasInt)
+		copy(ue.PreviousSecurityContext.KnasEnc, ue.SecurityContext.KnasEnc)
+		logger.NasLog.Infof("Preserved existing security context for UE: %s", ue.Supi)
+	}
+
+	ue.IsReAuthenticating = true
+	ue.NgKsi = (ue.NgKsi + 1) % 7
+
+	ausfClient := consumer.NewAUSFClient(h.amfContext.AusfUri)
+	servingNetwork := fmt.Sprintf("5G:mnc%s.mcc%s.3gppnetwork.org",
+		h.amfContext.ServedGuami[0].PlmnId.Mnc,
+		h.amfContext.ServedGuami[0].PlmnId.Mcc)
+
+	authResp, err := ausfClient.RequestAuthentication(ue.Supi, servingNetwork)
+	if err != nil {
+		logger.NasLog.Errorf("Re-authentication request failed: %v", err)
+		ue.IsReAuthenticating = false
+		return fmt.Errorf("re-authentication request failed: %v", err)
+	}
+
+	if authResp.Links != nil {
+		if authCtxId, ok := authResp.Links["5g-aka"]; ok {
+			ue.AuthenticationCtxId = authCtxId
+		}
+	}
+
+	if av, ok := authResp.AuthenticationVector.(map[string]interface{}); ok {
+		var rand, autn []byte
+
+		if randStr, ok := av["rand"].(string); ok {
+			rand, _ = hex.DecodeString(randStr)
+		}
+		if autnStr, ok := av["autn"].(string); ok {
+			autn, _ = hex.DecodeString(autnStr)
+		}
+
+		if err := h.amfContext.PersistUEContext(ue); err != nil {
+			logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+		}
+
+		return h.SendAuthenticationRequest(ue, rand, autn)
+	}
+
+	ue.IsReAuthenticating = false
+	return fmt.Errorf("no authentication vector in response")
 }
 
 func (h *Handler) SendSecurityModeCommand(ue *context.UEContext) error {
@@ -378,6 +479,11 @@ func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []by
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	if ue.RegistrationState == context.RegStateRegistered {
+		logger.NasLog.Infof("Re-authentication completed successfully for UE: %s", ue.Supi)
+		return nil
 	}
 
 	udmClient := consumer.NewUDMClient(h.amfContext.UdmUri)

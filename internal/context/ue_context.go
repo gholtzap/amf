@@ -55,6 +55,10 @@ type UEContext struct {
 	T3560 *time.Timer // Authentication Request timer
 	T3570 *time.Timer // Security Mode Command timer
 
+	// Re-authentication state
+	IsReAuthenticating bool
+	PreviousSecurityContext *SecurityContext
+
 	// RAN Connection
 	RanContext *RANContext
 
