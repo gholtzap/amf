@@ -14,6 +14,7 @@ type UEContext struct {
 	Suci        string // Subscription Concealed Identifier
 	Pei         string // Permanent Equipment Identifier (IMEI)
 	Guti        *Guti  // 5G Globally Unique Temporary Identifier
+	RequestedIdentityType uint8 // Identity type for T3570 retransmission
 
 	// NGAP IDs
 	RanUeNgapId int64  // RAN UE NGAP ID
@@ -64,6 +65,7 @@ type UEContext struct {
 	T3550Counter int
 	T3560Counter int
 	T3565Counter int
+	T3570Counter int
 
 	// Re-authentication state
 	IsReAuthenticating bool
@@ -277,13 +279,18 @@ func (ue *UEContext) StopT3512() {
 	ue.StopTimer(&ue.T3512)
 }
 
+func (ue *UEContext) StopT3570() {
+	ue.StopTimer(&ue.T3570)
+	ue.T3570Counter = 0
+}
+
 func (ue *UEContext) StopAllTimers() {
 	ue.StopT3550()
 	ue.StopT3560()
 	ue.StopT3565()
+	ue.StopT3570()
 	ue.StopT3512()
 	ue.StopTimer(&ue.T3502)
 	ue.StopTimer(&ue.T3513)
 	ue.StopTimer(&ue.T3522)
-	ue.StopTimer(&ue.T3570)
 }

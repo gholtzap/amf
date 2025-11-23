@@ -65,6 +65,7 @@
 - T3550 (Registration Accept timer with retransmission)
 - T3560 (Authentication Request timer with retransmission)
 - T3565 (Security Mode Command timer with retransmission)
+- T3570 (Identity Request timer with retransmission)
 
 ### NAS - SM (Session Management)
 - PDU Session Establishment Request/Accept/Reject
@@ -157,7 +158,7 @@
 - NAS transport reject
 
 #### 5G MM Timers
-- T3502, T3510, T3511, T3513, T3516, T3517, T3519, T3520, T3521, T3522, T3525, T3540, T3555, T3570
+- T3502, T3510, T3511, T3513, T3516, T3517, T3519, T3520, T3521, T3522, T3525, T3540, T3555
 
 ### NAS SM Procedures
 - PDU Session Authentication

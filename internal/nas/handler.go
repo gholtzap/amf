@@ -174,6 +174,8 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 func (h *Handler) SendIdentityRequest(ue *context.UEContext, identityType uint8) error {
 	logger.NasLog.Infof("Sending Identity Request to UE for identity type: %d", identityType)
 
+	ue.RequestedIdentityType = identityType
+
 	msg := &IdentityRequestMsg{
 		IdentityType: identityType,
 	}
@@ -198,6 +200,8 @@ func (h *Handler) SendIdentityRequest(ue *context.UEContext, identityType uint8)
 		}
 		nasData = EncodeNASPDU(pdu)
 	}
+
+	h.startT3570(ue, identityType)
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
@@ -229,6 +233,8 @@ func (h *Handler) SendAuthenticationRequest(ue *context.UEContext, rand, autn []
 
 func (h *Handler) HandleIdentityResponse(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Identity Response for UE")
+
+	ue.StopT3570()
 
 	idResp, err := DecodeIdentityResponse(payload)
 	if err != nil {
@@ -1355,6 +1361,33 @@ func (h *Handler) startT3565(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3570(ue *context.UEContext, identityType uint8) {
+	ue.StopT3570()
+
+	timerConfig := getTimerConfig("T3570")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3570Counter++
+	logger.NasLog.Infof("Starting T3570 timer (attempt %d/%d) for UE: %s",
+		ue.T3570Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3570 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3570 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3570Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3570Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Identity Request for UE: %s", ue.Supi)
+			h.SendIdentityRequest(ue, identityType)
+		} else {
+			logger.NasLog.Errorf("T3570 max retries reached for UE: %s, identity request failed", ue.Supi)
+			ue.StopT3570()
+			h.SendRegistrationReject(ue, CauseProtocolError)
+		}
+	})
+}
+
 func (h *Handler) startT3550(ue *context.UEContext) {
 	ue.StopT3550()
 
@@ -1409,6 +1442,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 	case "T3560":
 		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
 	case "T3565":
+		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+	case "T3570":
 		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
