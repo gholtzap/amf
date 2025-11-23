@@ -701,7 +701,8 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		return fmt.Errorf("failed to decode PDU session establishment request: %v", err)
 	}
 
-	logger.NasLog.Infof("PDU Session Type: %d, SSC Mode: %d", smReq.PDUSessionType, smReq.SSCMode)
+	alwaysOnRequested := smReq.AlwaysOnPDUSessionRequested == 1
+	logger.NasLog.Infof("PDU Session Type: %d, SSC Mode: %d, AlwaysOn Requested: %v", smReq.PDUSessionType, smReq.SSCMode, alwaysOnRequested)
 
 	dnnStr := "internet"
 	if len(dnn) > 0 {
@@ -747,6 +748,7 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		Dnn:           dnnStr,
 		SessionAmbr:   &context.Ambr{Uplink: "100 Mbps", Downlink: "100 Mbps"},
 		State:         context.PduSessionActive,
+		AlwaysOn:      alwaysOnRequested,
 	}
 
 	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
@@ -762,6 +764,10 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		SessionAMBR:    []byte{0x3e, 0x80, 0x3e, 0x80},
 		QoSRules:       []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
 		PDUAddress:     []byte{0x01, 192, 168, 100, 10},
+	}
+
+	if alwaysOnRequested {
+		acceptMsg.AlwaysOnPDUSessionIndication = 1
 	}
 
 	if len(dnn) > 0 {

@@ -65,6 +65,7 @@
 - QoS handling (basic)
 - Session AMBR allocation
 - 5GSM Status
+- Always-on PDU session handling
 
 ### SBI (Service-Based Interfaces)
 
@@ -156,7 +157,6 @@
 
 ### NAS SM Procedures
 - PDU Session Authentication
-- Always-on PDU session handling
 - SSC mode selection
 - Network-requested PDU session establishment
 - QoS Flow management (detailed)

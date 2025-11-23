@@ -262,6 +262,13 @@ func DecodePDUSessionEstablishmentRequest(payload []byte) (*PDUSessionEstablishm
 			msg.SSCMode = payload[offset] & 0x07
 			offset++
 
+		case 0x0b:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.AlwaysOnPDUSessionRequested = payload[offset] & 0x01
+			offset++
+
 		case 0x28:
 			if offset >= len(payload) {
 				return msg, nil
@@ -344,6 +351,11 @@ func EncodePDUSessionEstablishmentAccept(msg *PDUSessionEstablishmentAcceptMsg) 
 		payload = append(payload, IEISSNSSAl)
 		payload = append(payload, uint8(len(msg.SNSSAl)))
 		payload = append(payload, msg.SNSSAl...)
+	}
+
+	if msg.AlwaysOnPDUSessionIndication > 0 {
+		payload = append(payload, 0x08)
+		payload = append(payload, msg.AlwaysOnPDUSessionIndication&0x01)
 	}
 
 	if len(msg.QoSFlowDescriptions) > 0 {

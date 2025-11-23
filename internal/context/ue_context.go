@@ -137,6 +137,7 @@ type PduSessionContext struct {
 	AllocatedEbis  map[int32]int32 // EBI to ARP priority level mapping
 	SmContextRef   string
 	SmContextId    string
+	AlwaysOn       bool
 }
 
 // PduSessionState represents PDU Session state
