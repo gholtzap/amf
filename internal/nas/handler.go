@@ -1216,6 +1216,10 @@ func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, paylo
 func (h *Handler) SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8, reregistrationRequired bool) error {
 	logger.NasLog.Infof("Sending Network-Initiated Deregistration Request to UE SUPI: %s", ue.Supi)
 
+	ue.DeregType = deregType
+	ue.DeregCause = cause
+	ue.DeregReregRequired = reregistrationRequired
+
 	deregTypeValue := deregType
 	if reregistrationRequired {
 		deregTypeValue |= DeregistrationReRegistrationRequired
@@ -1248,18 +1252,20 @@ func (h *Handler) SendDeregistrationRequest(ue *context.UEContext, deregType uin
 		nasData = EncodeNASPDU(pdu)
 	}
 
-	ue.RegistrationState = context.RegStateDeregistered
-	ue.RmState = context.RmDeregistered
-
-	if err := h.amfContext.PersistUEContext(ue); err != nil {
-		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	err = h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+	if err != nil {
+		return err
 	}
 
-	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+	h.startT3540(ue)
+
+	return nil
 }
 
 func (h *Handler) HandleDeregistrationAccept(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Deregistration Accept (UE Terminating) for UE SUPI: %s", ue.Supi)
+
+	ue.StopT3540()
 
 	logger.NasLog.Infof("Network-initiated deregistration completed successfully for UE: %s", ue.Supi)
 
@@ -1435,6 +1441,39 @@ func (h *Handler) startT3512(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3540(ue *context.UEContext) {
+	ue.StopT3540()
+
+	timerConfig := getTimerConfig("T3540")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3540Counter++
+	logger.NasLog.Infof("Starting T3540 timer (attempt %d/%d) for UE: %s",
+		ue.T3540Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3540 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3540 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3540Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3540Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Deregistration Request for UE: %s", ue.Supi)
+			h.SendDeregistrationRequest(ue, ue.DeregType, ue.DeregCause, ue.DeregReregRequired)
+		} else {
+			logger.NasLog.Errorf("T3540 max retries reached for UE: %s, deregistration failed", ue.Supi)
+			ue.StopT3540()
+			ue.RegistrationState = context.RegStateDeregistered
+			ue.RmState = context.RmDeregistered
+			if err := h.amfContext.PersistUEContext(ue); err != nil {
+				logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+			}
+			h.amfContext.DeleteUEContext(ue.AmfUeNgapId)
+			logger.NasLog.Infof("UE context deleted for AMF UE NGAP ID: %d after T3540 timeout", ue.AmfUeNgapId)
+		}
+	})
+}
+
 func getTimerConfig(timerName string) *TimerConfig {
 	switch timerName {
 	case "T3550":
@@ -1445,6 +1484,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
 	case "T3570":
 		return &TimerConfig{Enable: true, ExpireTime: 6, MaxRetryTimes: 4}
+	case "T3540":
+		return &TimerConfig{Enable: true, ExpireTime: 10, MaxRetryTimes: 4}
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
 	}
