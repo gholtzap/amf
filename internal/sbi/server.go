@@ -18,7 +18,7 @@ import (
 )
 
 type NASHandler interface {
-	SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8) error
+	SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8, reregistrationRequired bool) error
 }
 
 type Server struct {

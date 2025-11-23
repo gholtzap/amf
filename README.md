@@ -52,6 +52,7 @@
 - Service Request/Accept
 - Extended service request
 - Deregistration (UE-initiated and Network-initiated)
+- Deregistration with re-registration required
 - Configuration Update Command/Complete
 - GUTI reallocation
 - Authentication Request/Response/Reject/Failure
@@ -129,9 +130,6 @@
 - Emergency registration
 - SNPN registration
 - Disaster roaming
-
-#### Deregistration
-- Re-registration required
 
 #### Authentication
 - EAP-AKA' authentication

@@ -1077,11 +1077,17 @@ func (h *Handler) HandleConfigurationUpdateComplete(ue *context.UEContext, paylo
 	return nil
 }
 
-func (h *Handler) SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8) error {
+func (h *Handler) SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8, reregistrationRequired bool) error {
 	logger.NasLog.Infof("Sending Network-Initiated Deregistration Request to UE SUPI: %s", ue.Supi)
 
+	deregTypeValue := deregType
+	if reregistrationRequired {
+		deregTypeValue |= DeregistrationReRegistrationRequired
+		logger.NasLog.Infof("Re-registration required flag set for deregistration")
+	}
+
 	msg := &DeregistrationRequestMsg{
-		DeregistrationType: deregType,
+		DeregistrationType: deregTypeValue,
 		Cause5GMM:          cause,
 	}
 

@@ -79,6 +79,11 @@ const (
 )
 
 const (
+	DeregistrationReRegistrationNotRequired = 0x00
+	DeregistrationReRegistrationRequired    = 0x08
+)
+
+const (
 	ProtocolDiscriminator5GMM = 0x7e
 	ProtocolDiscriminator5GSM = 0x2e
 )

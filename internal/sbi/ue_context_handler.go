@@ -73,7 +73,7 @@ func (s *Server) ReleaseUEContext(ueContextId string, releaseData *UEContextRele
 
 	if s.nasHandler != nil && ue.CmState == context.CmConnected {
 		logger.SbiLog.Infof("Sending network-initiated deregistration to UE: %s", ue.Supi)
-		if err := s.nasHandler.SendDeregistrationRequest(ue, 0x01, 0x00); err != nil {
+		if err := s.nasHandler.SendDeregistrationRequest(ue, 0x01, 0x00, false); err != nil {
 			logger.SbiLog.Warnf("Failed to send deregistration request: %v", err)
 		}
 	} else {
