@@ -17,6 +17,7 @@ const (
 	ProcedureCodePaging                    = 8
 	ProcedureCodeHandoverPreparation       = 0
 	ProcedureCodeHandoverResourceAllocation = 1
+	ProcedureCodeHandoverNotification      = 3
 	ProcedureCodePathSwitchRequest         = 2
 	ProcedureCodeErrorIndication           = 11
 	ProcedureCodeOverloadStart             = 24
@@ -117,6 +118,9 @@ const (
 	ProtocolIEIDTargetID                      = 104
 	ProtocolIEIDPDUSessionResourceListHORqd   = 72
 	ProtocolIEIDSourceToTargetTransparentContainer = 99
+	ProtocolIEIDTargetToSourceTransparentContainer = 100
+	ProtocolIEIDPDUSessionResourceAdmittedList = 73
+	ProtocolIEIDPDUSessionResourceFailedToSetupListHOAck = 12
 )
 
 type GlobalRANNodeID struct {
@@ -278,6 +282,16 @@ type TargetID struct {
 type PDUSessionResourceItemHORqd struct {
 	PDUSessionID     int
 	HandoverTransfer []byte
+}
+
+type PDUSessionResourceAdmittedItem struct {
+	PDUSessionID                int
+	HandoverRequestAckTransfer  []byte
+}
+
+type PDUSessionResourceFailedToSetupItem struct {
+	PDUSessionID int
+	Cause        *Cause
 }
 
 func DecodeNGAPPDU(data []byte) (*NGAPPDU, error) {

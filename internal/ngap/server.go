@@ -133,6 +133,14 @@ func (s *Server) handleMessage(ranContext *context.RANContext, data []byte) erro
 		return s.handler.HandleLocationReport(ranContext, pdu)
 	case ProcedureCodeHandoverPreparation:
 		return s.handler.HandleHandoverRequired(ranContext, pdu)
+	case ProcedureCodeHandoverResourceAllocation:
+		if pdu.Type == PDUTypeSuccessfulOutcome {
+			return s.handler.HandleHandoverRequestAcknowledge(ranContext, pdu)
+		}
+		logger.NgapLog.Warnf("Unexpected PDU type for Handover Resource Allocation: %s", pdu.Type)
+		return nil
+	case ProcedureCodeHandoverNotification:
+		return s.handler.HandleHandoverNotify(ranContext, pdu)
 	default:
 		logger.NgapLog.Warnf("Unsupported procedure code: %d", pdu.ProcedureCode)
 		return nil

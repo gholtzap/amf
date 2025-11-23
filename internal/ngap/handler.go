@@ -1675,7 +1675,158 @@ func (h *Handler) HandleHandoverRequired(ranContext *context.RANContext, pdu *NG
 			targetID.TargetRANNodeID.PLMNIdentity, targetID.TargetRANNodeID.GNBID)
 	}
 
+	targetToSourceContainer := make([]byte, len(sourceToTargetContainer))
+	copy(targetToSourceContainer, sourceToTargetContainer)
+
+	admittedList := make([]byte, 0)
+	for _, session := range pduSessionResourceList {
+		admittedList = append(admittedList, byte(session.PDUSessionID))
+		transferLen := len(session.HandoverTransfer)
+		admittedList = append(admittedList, byte(transferLen>>8), byte(transferLen&0xff))
+		admittedList = append(admittedList, session.HandoverTransfer...)
+	}
+
+	commandPDU := &NGAPPDU{
+		Type:          PDUTypeSuccessfulOutcome,
+		ProcedureCode: ProcedureCodeHandoverPreparation,
+		Criticality:   CriticalityReject,
+		IEs: []ProtocolIE{
+			{
+				Id:          ProtocolIEIDAMFUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       amfUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDRANUENGAPID,
+				Criticality: CriticalityReject,
+				Value:       ranUeNgapId,
+			},
+			{
+				Id:          ProtocolIEIDPDUSessionResourceAdmittedList,
+				Criticality: CriticalityIgnore,
+				Value:       admittedList,
+			},
+			{
+				Id:          ProtocolIEIDTargetToSourceTransparentContainer,
+				Criticality: CriticalityReject,
+				Value:       targetToSourceContainer,
+			},
+		},
+	}
+
+	logger.NgapLog.Infof("Sending Handover Command to source RAN for AMF UE NGAP ID=%d", amfUeNgapId)
+
 	_ = ue
+
+	return h.server.SendMessage(ranContext.Conn, commandPDU)
+}
+
+func (h *Handler) HandleHandoverRequestAcknowledge(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Handover Request Acknowledge")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var admittedList []PDUSessionResourceAdmittedItem
+	var targetToSourceContainer []byte
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDPDUSessionResourceAdmittedList:
+			if data, ok := ie.Value.([]byte); ok {
+				admittedList = parsePDUSessionResourceAdmittedList(data)
+			}
+		case ProtocolIEIDTargetToSourceTransparentContainer:
+			if data, ok := ie.Value.([]byte); ok {
+				targetToSourceContainer = data
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	logger.NgapLog.Infof("Handover Request Acknowledge received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d, Admitted PDU Sessions=%d",
+		amfUeNgapId, ranUeNgapId, len(admittedList))
+
+	_ = ue
+	_ = targetToSourceContainer
+
+	return nil
+}
+
+func (h *Handler) HandleHandoverNotify(ranContext *context.RANContext, pdu *NGAPPDU) error {
+	logger.NgapLog.Info("Handling Handover Notify")
+
+	var amfUeNgapId int64
+	var ranUeNgapId int64
+	var userLocationInfo *UserLocationInformation
+
+	for _, ie := range pdu.IEs {
+		switch ie.Id {
+		case ProtocolIEIDAMFUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				amfUeNgapId = val
+			}
+		case ProtocolIEIDRANUENGAPID:
+			if val, ok := ie.Value.(int64); ok {
+				ranUeNgapId = val
+			}
+		case ProtocolIEIDUserLocationInformation:
+			if data, ok := ie.Value.([]byte); ok && len(data) >= 14 {
+				userLocationInfo = &UserLocationInformation{
+					NRCGIPresent: true,
+					NRCGI: &NRCGI{
+						PLMNIdentity: data[:3],
+						NRCellID:     data[3:8],
+					},
+					TAI: &TAI{
+						PLMNIdentity: data[8:11],
+						TAC:          data[11:14],
+					},
+				}
+			}
+		}
+	}
+
+	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
+	if !ok {
+		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	logger.NgapLog.Infof("Handover Notify received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d", amfUeNgapId, ranUeNgapId)
+
+	if userLocationInfo != nil && userLocationInfo.TAI != nil {
+		ue.Tai = context.Tai{
+			PlmnId: context.PlmnId{
+				Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
+				Mnc: "01",
+			},
+			Tac: string(userLocationInfo.TAI.TAC),
+		}
+		logger.NgapLog.Infof("Updated UE location after handover: TAC=%s", ue.Tai.Tac)
+	}
+
+	oldRanContext := ue.RanContext
+	if oldRanContext != nil && oldRanContext != ranContext {
+		oldRanContext.RemoveUE(ue.RanUeNgapId)
+		logger.NgapLog.Infof("Removed UE from old RAN context")
+	}
+
+	ue.RanContext = ranContext
+	ue.RanUeNgapId = ranUeNgapId
+	ranContext.AddUE(ranUeNgapId, ue)
+
+	logger.NgapLog.Infof("Handover completed successfully for AMF UE NGAP ID=%d", amfUeNgapId)
 
 	return nil
 }
@@ -1701,6 +1852,37 @@ func parsePDUSessionResourceListHORqd(data []byte) []PDUSessionResourceItemHORqd
 			if offset+transferLen <= len(data) {
 				item.HandoverTransfer = make([]byte, transferLen)
 				copy(item.HandoverTransfer, data[offset:offset+transferLen])
+				offset += transferLen
+			}
+		}
+
+		items = append(items, item)
+	}
+
+	return items
+}
+
+func parsePDUSessionResourceAdmittedList(data []byte) []PDUSessionResourceAdmittedItem {
+	items := []PDUSessionResourceAdmittedItem{}
+
+	offset := 0
+	for offset < len(data) {
+		if offset+1 > len(data) {
+			break
+		}
+
+		item := PDUSessionResourceAdmittedItem{
+			PDUSessionID: int(data[offset]),
+		}
+		offset++
+
+		if offset+2 <= len(data) {
+			transferLen := int(data[offset])<<8 | int(data[offset+1])
+			offset += 2
+
+			if offset+transferLen <= len(data) {
+				item.HandoverRequestAckTransfer = make([]byte, transferLen)
+				copy(item.HandoverRequestAckTransfer, data[offset:offset+transferLen])
 				offset += transferLen
 			}
 		}
