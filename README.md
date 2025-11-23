@@ -56,6 +56,7 @@
 - Deregistration with re-registration required
 - Configuration Update Command/Complete
 - GUTI reallocation
+- Service area list updates
 - NITZ (Network Identity and Time Zone)
 - Authentication Request/Response/Reject/Failure
 - Identity Request/Response
@@ -146,7 +147,6 @@
 - EAP-AKA' authentication
 
 #### Generic UE Configuration Update
-- Service area list updates
 
 #### Mobility
 - Intra-AMF mobility (N2 handover)

@@ -1170,6 +1170,29 @@ func (h *Handler) SendConfigurationUpdateCommand(ue *context.UEContext, newGuti 
 		Guti:                          EncodeGutiMobileIdentity(newGuti),
 	}
 
+	cfg := factory.GetConfig()
+	if cfg != nil && cfg.Configuration != nil && len(cfg.Configuration.SupportTaiList) > 0 {
+		taiList := make([]context.Tai, 0, len(cfg.Configuration.SupportTaiList))
+		for _, supportTai := range cfg.Configuration.SupportTaiList {
+			if supportTai.PlmnId != nil {
+				tai := context.Tai{
+					PlmnId: context.PlmnId{
+						Mcc: supportTai.PlmnId.Mcc,
+						Mnc: supportTai.PlmnId.Mnc,
+					},
+					Tac: supportTai.Tac,
+				}
+				taiList = append(taiList, tai)
+			}
+		}
+		if len(taiList) > 0 {
+			msg.ServiceAreaList = EncodeServiceAreaList(taiList)
+			if len(msg.ServiceAreaList) > 0 {
+				logger.NasLog.Infof("Including Service Area List in Configuration Update (%d TAIs)", len(taiList))
+			}
+		}
+	}
+
 	if h.amfContext.TimeZoneOffsetMinutes != 0 || h.amfContext.DaylightSavingTime != 0 {
 		msg.LocalTimeZone = EncodeLocalTimeZone(h.amfContext.TimeZoneOffsetMinutes)
 		logger.NasLog.Infof("Including NITZ Local Time Zone in Configuration Update")

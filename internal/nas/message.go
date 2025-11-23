@@ -837,6 +837,71 @@ func EncodeNetworkDaylightSavingTime(dstValue int) []byte {
 	return []byte{byte(len([]byte{byte(dstValue)})), byte(dstValue)}
 }
 
+func EncodePLMN(mcc, mnc string) []byte {
+	plmnBytes := make([]byte, 3)
+
+	mccBytes := []byte(mcc)
+	mncBytes := []byte(mnc)
+
+	plmnBytes[0] = ((mccBytes[0] - '0') << 0) | ((mccBytes[1] - '0') << 4)
+	if len(mnc) == 2 {
+		plmnBytes[1] = ((mccBytes[2] - '0') << 0) | 0xf0
+		plmnBytes[2] = ((mncBytes[0] - '0') << 0) | ((mncBytes[1] - '0') << 4)
+	} else {
+		plmnBytes[1] = ((mccBytes[2] - '0') << 0) | ((mncBytes[2] - '0') << 4)
+		plmnBytes[2] = ((mncBytes[0] - '0') << 0) | ((mncBytes[1] - '0') << 4)
+	}
+
+	return plmnBytes
+}
+
+func EncodeServiceAreaList(taiList []context.Tai) []byte {
+	if len(taiList) == 0 {
+		return nil
+	}
+
+	serviceAreaMap := make(map[string][]string)
+
+	for _, tai := range taiList {
+		plmnKey := tai.PlmnId.Mcc + tai.PlmnId.Mnc
+		serviceAreaMap[plmnKey] = append(serviceAreaMap[plmnKey], tai.Tac)
+	}
+
+	payload := make([]byte, 0)
+
+	for plmnKey, tacs := range serviceAreaMap {
+		if len(tacs) > 15 {
+			tacs = tacs[:15]
+		}
+
+		listType := byte(0x00)
+		numElements := byte(len(tacs))
+		payload = append(payload, (listType<<6)|numElements)
+
+		mcc := plmnKey[0:3]
+		mnc := plmnKey[3:]
+		plmnBytes := EncodePLMN(mcc, mnc)
+		payload = append(payload, plmnBytes...)
+
+		for _, tac := range tacs {
+			tacBytes := make([]byte, 3)
+			for i := 0; i < 3 && i < len(tac); i++ {
+				if tac[i] >= '0' && tac[i] <= '9' {
+					tacBytes[i] = tac[i] - '0'
+				} else if tac[i] >= 'A' && tac[i] <= 'F' {
+					tacBytes[i] = tac[i] - 'A' + 10
+				} else if tac[i] >= 'a' && tac[i] <= 'f' {
+					tacBytes[i] = tac[i] - 'a' + 10
+				}
+			}
+			tacValue := (uint32(tacBytes[0]) << 16) | (uint32(tacBytes[1]) << 8) | uint32(tacBytes[2])
+			payload = append(payload, byte(tacValue>>16), byte(tacValue>>8), byte(tacValue))
+		}
+	}
+
+	return payload
+}
+
 func DecodeConfigurationUpdateComplete(payload []byte) (*ConfigurationUpdateCompleteMsg, error) {
 	msg := &ConfigurationUpdateCompleteMsg{}
 	return msg, nil
