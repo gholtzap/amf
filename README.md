@@ -36,6 +36,7 @@
 - Initial Registration
 - Mobility Registration Update
 - Periodic Registration Update
+- Emergency registration
 - GUTI-based registration
 - SUCI/SUPI handling
 
@@ -145,7 +146,6 @@
 ### NAS MM Procedures
 
 #### Registration
-- Emergency registration
 - SNPN registration
 - Disaster roaming
 

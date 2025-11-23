@@ -25,6 +25,7 @@ type UEContext struct {
 	NgKsi                 int
 	AuthenticationCtxId   string
 	UeSecurityCapability  string
+	IsEmergencyRegistration bool
 
 	// NAS Security Counters
 	ULCount uint32

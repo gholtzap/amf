@@ -94,6 +94,7 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 
 	ue.RegistrationType = regReq.RegistrationType
 	ue.NgKsi = int(regReq.NgKSI)
+	ue.IsEmergencyRegistration = (regReq.RegistrationType == RegistrationTypeEmergency)
 
 	var existingUe *context.UEContext
 	isGutiRegistration := false
@@ -143,6 +144,15 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	   ue.SecurityContext != nil && ue.SecurityContext.Activated {
 		logger.NasLog.Infof("Skipping authentication for periodic/mobility update with existing context")
 		return h.SendRegistrationAccept(ue)
+	}
+
+	if ue.IsEmergencyRegistration {
+		logger.NasLog.Infof("Emergency registration detected for UE")
+		if ue.Supi == "" {
+			ue.Supi = "emergency-" + fmt.Sprintf("%d", ue.AmfUeNgapId)
+			logger.NasLog.Infof("Assigned emergency SUPI: %s", ue.Supi)
+		}
+		return h.SendEmergencyRegistrationAccept(ue)
 	}
 
 	ausfClient := consumer.NewAUSFClient(h.amfContext.AusfUri)
@@ -579,6 +589,42 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	}
 
 	h.startT3550(ue)
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) SendEmergencyRegistrationAccept(ue *context.UEContext) error {
+	logger.NasLog.Infof("Sending Emergency Registration Accept to UE")
+
+	if ue.Guti == nil {
+		ue.Guti = h.amfContext.AllocateGuti()
+		logger.NasLog.Infof("Allocated GUTI for emergency UE: %+v", ue.Guti)
+	}
+
+	msg := &RegistrationAcceptMsg{
+		RegistrationResult: 0x11,
+		MobileIdentity:    EncodeGutiMobileIdentity(ue.Guti),
+		AllowedNSSAI:      []byte{0x01, 0x01, 0x01},
+	}
+
+	payload := EncodeRegistrationAccept(msg)
+
+	pdu := &NASPDU{
+		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
+		SecurityHeaderType:    SecurityHeaderTypePlainNAS,
+		MessageType:           MsgTypeRegistrationAccept,
+		Payload:               payload,
+	}
+
+	nasData := EncodeNASPDU(pdu)
+
+	ue.RegistrationState = context.RegStateRegistered
+	ue.RmState = context.RmRegistered
+	logger.NasLog.Infof("Emergency UE %s successfully registered", ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
