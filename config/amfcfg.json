@@ -131,6 +131,11 @@
       "enable": true,
       "expireTime": 6,
       "maxRetryTimes": 4
+    },
+    "eDrxParameters": {
+      "enabled": true,
+      "eDrxCycleLength": 5,
+      "pagingTimeWindow": 2
     }
   }
 }

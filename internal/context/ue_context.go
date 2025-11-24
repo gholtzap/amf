@@ -94,6 +94,15 @@ type UEContext struct {
 
 	// Subscription Data
 	SubscriptionData *SubscriptionData
+
+	// eDRX (Extended Discontinuous Reception)
+	EDrxParameters *EDrxParameters
+}
+
+type EDrxParameters struct {
+	EDrxValue      uint8
+	PagingTimeWindow uint8
+	Enabled        bool
 }
 
 // RegistrationState represents UE registration state

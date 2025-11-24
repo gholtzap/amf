@@ -43,12 +43,19 @@ type Configuration struct {
 	T3560                           *TimerValue   `json:"t3560"`
 	T3565                           *TimerValue   `json:"t3565"`
 	T3570                           *TimerValue   `json:"t3570"`
+	EDrxParameters                  *EDrxConfig   `json:"eDrxParameters"`
 	NrfUri                          string        `json:"nrfUri"`
 	UdmUri                          string        `json:"udmUri"`
 	AusfUri                         string        `json:"ausfUri"`
 	SmfUri                          string        `json:"smfUri"`
 	DatabaseUri                     string        `json:"databaseUri"`
 	DatabaseName                    string        `json:"databaseName"`
+}
+
+type EDrxConfig struct {
+	Enabled          bool `json:"enabled"`
+	EDrxCycleLength  int  `json:"eDrxCycleLength"`
+	PagingTimeWindow int  `json:"pagingTimeWindow"`
 }
 
 type Sbi struct {

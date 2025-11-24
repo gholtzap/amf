@@ -148,6 +148,7 @@
 - PLMN and S-NSSAI support
 - TAI tracking
 - MICO mode (Mobile Initiated Connection Only)
+- eDRX (Extended Discontinuous Reception) power saving
 
 ## NOT IMPLEMENTED FEATURES
 
@@ -222,7 +223,6 @@
 - Service gap control
 - Extended DRX
 - Power saving mode (PSM)
-- eDRX (Extended Discontinuous Reception)
 - Restricted service area
 - Forbidden area management
 

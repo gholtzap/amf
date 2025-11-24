@@ -71,6 +71,8 @@ const (
 	IEIPDUSessionID           = 0x12
 	IEIDNN                    = 0x25
 	IEISSNSSAl                = 0x22
+	IEIRequestedEDrxParameters = 0x6e
+	IEINegotiatedEDrxParameters = 0x6e
 )
 
 const (
@@ -170,6 +172,7 @@ type RegistrationRequestMsg struct {
 	UENetworkCapability   []byte
 	AdditionalGUTI        []byte
 	MicoIndication        bool
+	RequestedEDrxParameters []byte
 }
 
 type RegistrationAcceptMsg struct {
@@ -182,6 +185,7 @@ type RegistrationAcceptMsg struct {
 	EmergencyNumberList   []byte
 	MicoIndication        bool
 	NetworkSlicingIndication bool
+	NegotiatedEDrxParameters []byte
 }
 
 type RegistrationRejectMsg struct {
@@ -419,6 +423,18 @@ func DecodeRegistrationRequest(payload []byte) (*RegistrationRequestMsg, error) 
 			}
 			offset += length
 
+		case IEIRequestedEDrxParameters:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested eDRX parameters length")
+			}
+			msg.RequestedEDrxParameters = payload[offset : offset+length]
+			offset += length
+
 		default:
 			if offset >= len(payload) {
 				return msg, nil
@@ -585,6 +601,12 @@ func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
 		payload = append(payload, IEIT3502Value)
 		payload = append(payload, uint8(len(msg.T3502Value)))
 		payload = append(payload, msg.T3502Value...)
+	}
+
+	if len(msg.NegotiatedEDrxParameters) > 0 {
+		payload = append(payload, IEINegotiatedEDrxParameters)
+		payload = append(payload, uint8(len(msg.NegotiatedEDrxParameters)))
+		payload = append(payload, msg.NegotiatedEDrxParameters...)
 	}
 
 	if msg.MicoIndication {

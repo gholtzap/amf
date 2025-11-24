@@ -101,6 +101,20 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 		logger.NasLog.Infof("UE requested MICO mode")
 	}
 
+	if len(regReq.RequestedEDrxParameters) > 0 {
+		eDrxParams := &context.EDrxParameters{
+			Enabled:          true,
+			EDrxValue:        regReq.RequestedEDrxParameters[0],
+			PagingTimeWindow: 0,
+		}
+		if len(regReq.RequestedEDrxParameters) > 1 {
+			eDrxParams.PagingTimeWindow = regReq.RequestedEDrxParameters[1]
+		}
+		ue.EDrxParameters = eDrxParams
+		logger.NasLog.Infof("UE requested eDRX: value=0x%02x, PTW=0x%02x",
+			eDrxParams.EDrxValue, eDrxParams.PagingTimeWindow)
+	}
+
 	var existingUe *context.UEContext
 	isGutiRegistration := false
 
@@ -577,6 +591,15 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 		AllowedNSSAI:      []byte{0x01, 0x01, 0x01},
 		T3512Value:        []byte{0x5e, 0x01, 0x3c},
 		MicoIndication:    ue.MicoMode,
+	}
+
+	if ue.EDrxParameters != nil && ue.EDrxParameters.Enabled {
+		msg.NegotiatedEDrxParameters = []byte{
+			ue.EDrxParameters.EDrxValue,
+			ue.EDrxParameters.PagingTimeWindow,
+		}
+		logger.NasLog.Infof("Sending negotiated eDRX parameters: value=0x%02x, PTW=0x%02x",
+			ue.EDrxParameters.EDrxValue, ue.EDrxParameters.PagingTimeWindow)
 	}
 
 	payload := EncodeRegistrationAccept(msg)
