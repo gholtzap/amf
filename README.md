@@ -113,6 +113,7 @@
   - Connectivity state report
   - Reachability report
   - Loss of connectivity events
+  - Communication failure events
 
 #### Namf_Location
 - Provide Location Info
@@ -194,7 +195,6 @@
 #### Namf_EventExposure
 - Location reporting (periodic and event-driven)
 - UE mobility events
-- Communication failure events
 
 #### Namf_Location
 - Event-driven location reporting

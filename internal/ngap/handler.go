@@ -2034,3 +2034,35 @@ func (h *Handler) notifyLossOfConnectivity(ue *context.UEContext) {
 
 	sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeLossOfConnectivity, ue.Supi, additionalData)
 }
+
+func (h *Handler) notifyCommunicationFailure(ue *context.UEContext, failureType string) {
+	if h.amfContext == nil || ue == nil {
+		return
+	}
+
+	additionalData := map[string]interface{}{
+		"failureType": failureType,
+		"cmState":     string(ue.CmState),
+		"rmState":     string(ue.RmState),
+	}
+
+	if ue.Pei != "" {
+		additionalData["pei"] = ue.Pei
+	}
+
+	if ue.Tai.PlmnId.Mcc != "" {
+		additionalData["tai"] = map[string]interface{}{
+			"plmnId": map[string]string{
+				"mcc": ue.Tai.PlmnId.Mcc,
+				"mnc": ue.Tai.PlmnId.Mnc,
+			},
+			"tac": ue.Tai.Tac,
+		}
+	}
+
+	sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeCommunicationFailure, ue.Supi, additionalData)
+}
+
+func (h *Handler) NotifyCommunicationFailure(ue *context.UEContext, failureType string) {
+	h.notifyCommunicationFailure(ue, failureType)
+}

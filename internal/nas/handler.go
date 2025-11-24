@@ -19,6 +19,7 @@ type Handler struct {
 type NGAPHandler interface {
 	SendDownlinkNASTransport(ranUeNgapId, amfUeNgapId int64, nasPDU []byte) error
 	SendPDUSessionResourceSetupRequest(ranUeNgapId, amfUeNgapId int64, pduSessionId uint8, nasPDU []byte, n2SmInfo []byte) error
+	NotifyCommunicationFailure(ue *context.UEContext, failureType string)
 }
 
 func NewHandler(ctx *context.AMFContext) *Handler {
@@ -1624,6 +1625,9 @@ func (h *Handler) startT3560(ue *context.UEContext, rand, autn []byte) {
 			logger.NasLog.Errorf("T3560 max retries reached for UE: %s, authentication failed", ue.Supi)
 			ue.StopT3560()
 			h.SendAuthenticationReject(ue)
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "AUTHENTICATION_FAILURE")
+			}
 		}
 	})
 }
@@ -1652,6 +1656,9 @@ func (h *Handler) startT3565(ue *context.UEContext) {
 			logger.NasLog.Errorf("T3565 max retries reached for UE: %s, security mode failed", ue.Supi)
 			ue.StopT3565()
 			h.SendRegistrationReject(ue, CauseProtocolError)
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "SECURITY_MODE_FAILURE")
+			}
 		}
 	})
 }
@@ -1679,6 +1686,9 @@ func (h *Handler) startT3570(ue *context.UEContext, identityType uint8) {
 			logger.NasLog.Errorf("T3570 max retries reached for UE: %s, identity request failed", ue.Supi)
 			ue.StopT3570()
 			h.SendRegistrationReject(ue, CauseProtocolError)
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "IDENTITY_REQUEST_FAILURE")
+			}
 		}
 	})
 }
@@ -1706,6 +1716,9 @@ func (h *Handler) startT3550(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3550 max retries reached for UE: %s, registration failed", ue.Supi)
 			ue.StopT3550()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "REGISTRATION_ACCEPT_FAILURE")
+			}
 		}
 	})
 }
@@ -1733,6 +1746,9 @@ func (h *Handler) startT3555(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3555 max retries reached for UE: %s, configuration update failed", ue.Supi)
 			ue.StopT3555()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "CONFIGURATION_UPDATE_FAILURE")
+			}
 		}
 	})
 }
@@ -1779,6 +1795,9 @@ func (h *Handler) startT3540(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3540 max retries reached for UE: %s, deregistration failed", ue.Supi)
 			ue.StopT3540()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "DEREGISTRATION_FAILURE")
+			}
 			ue.RegistrationState = context.RegStateDeregistered
 			ue.RmState = context.RmDeregistered
 			if err := h.amfContext.PersistUEContext(ue); err != nil {
@@ -1812,6 +1831,9 @@ func (h *Handler) startT3522(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3522 max retries reached for UE: %s, deregistration failed", ue.Supi)
 			ue.StopT3522()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "DEREGISTRATION_ACCEPT_FAILURE")
+			}
 			ue.RegistrationState = context.RegStateDeregistered
 			ue.RmState = context.RmDeregistered
 			if err := h.amfContext.PersistUEContext(ue); err != nil {
@@ -1848,6 +1870,9 @@ func (h *Handler) startT3513(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3513 max retries reached for UE: %s, paging failed", ue.Supi)
 			ue.StopT3513()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "PAGING_FAILURE")
+			}
 		}
 	})
 }
@@ -1875,6 +1900,9 @@ func (h *Handler) startT3517(ue *context.UEContext) {
 		} else {
 			logger.NasLog.Errorf("T3517 max retries reached for UE: %s, service accept failed", ue.Supi)
 			ue.StopT3517()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "SERVICE_ACCEPT_FAILURE")
+			}
 		}
 	})
 }
