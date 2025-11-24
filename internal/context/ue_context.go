@@ -36,6 +36,7 @@ type UEContext struct {
 
 	// Location Info
 	Tai             Tai    // Tracking Area Identity
+	LastTai         *Tai   // Previous Tracking Area Identity (for mobility detection)
 	TaiList         []Tai  // List of allowed Tracking Area Identities
 	CellId          string
 

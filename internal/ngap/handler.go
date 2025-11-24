@@ -1447,6 +1447,23 @@ func (h *Handler) HandlePathSwitchRequest(ranContext *context.RANContext, pdu *N
 			if !ue.IsTaiInList(newTai) {
 				logger.NgapLog.Infof("New TAI not in UE's allowed TAI list - Tracking Area Update needed")
 			}
+
+			oldTai := ue.Tai
+			ue.LastTai = &oldTai
+
+			additionalData := map[string]interface{}{
+				"oldTai": map[string]interface{}{
+					"mcc": oldTai.PlmnId.Mcc,
+					"mnc": oldTai.PlmnId.Mnc,
+					"tac": oldTai.Tac,
+				},
+				"newTai": map[string]interface{}{
+					"mcc": newTai.PlmnId.Mcc,
+					"mnc": newTai.PlmnId.Mnc,
+					"tac": newTai.Tac,
+				},
+			}
+			sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeUeMobility, ue.Supi, additionalData)
 		}
 
 		ue.Tai = newTai
@@ -1555,6 +1572,23 @@ func (h *Handler) HandleLocationReport(ranContext *context.RANContext, pdu *NGAP
 				if !ue.IsTaiInList(newTai) {
 					logger.NgapLog.Infof("New TAI not in UE's allowed TAI list - Tracking Area Update needed")
 				}
+
+				oldTai := ue.Tai
+				ue.LastTai = &oldTai
+
+				additionalData := map[string]interface{}{
+					"oldTai": map[string]interface{}{
+						"mcc": oldTai.PlmnId.Mcc,
+						"mnc": oldTai.PlmnId.Mnc,
+						"tac": oldTai.Tac,
+					},
+					"newTai": map[string]interface{}{
+						"mcc": newTai.PlmnId.Mcc,
+						"mnc": newTai.PlmnId.Mnc,
+						"tac": newTai.Tac,
+					},
+				}
+				sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeUeMobility, ue.Supi, additionalData)
 			}
 
 			ue.Tai = newTai
