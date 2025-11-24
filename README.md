@@ -146,6 +146,7 @@
 - Graceful shutdown with NRF deregistration
 - PLMN and S-NSSAI support
 - TAI tracking
+- MICO mode (Mobile Initiated Connection Only)
 
 ## NOT IMPLEMENTED FEATURES
 
@@ -222,7 +223,6 @@
 - Extended DRX
 - Power saving mode (PSM)
 - eDRX (Extended Discontinuous Reception)
-- MICO mode (Mobile Initiated Connection Only)
 - Restricted service area
 - Forbidden area management
 

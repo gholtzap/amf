@@ -105,6 +105,16 @@ func (s *Server) EnableUEReachability(ueContextId string, reqData *EnableUeReach
 	if reqData.Reachability == string(UeReachabilityREACHABLE) && ue.CmState == context.CmIdle {
 		logger.SbiLog.Infof("UE %s is in IDLE state, paging required to make reachable", ueContextId)
 
+		if ue.MicoMode {
+			logger.SbiLog.Warnf("UE %s is in MICO mode, paging not allowed for mobile-terminated services", ueContextId)
+			return nil, &ProblemDetails{
+				Type:   "about:blank",
+				Title:  "Forbidden",
+				Status: http.StatusForbidden,
+				Detail: "UE is in MICO mode and cannot be paged for mobile-terminated services",
+			}
+		}
+
 		if s.ngapHandler != nil {
 			if err := s.ngapHandler.SendPaging(ue); err != nil {
 				logger.SbiLog.Errorf("Failed to send paging for UE %s: %v", ueContextId, err)
@@ -179,6 +189,10 @@ func (s *Server) EnableGroupReachability(reqData *EnableGroupReachabilityReqData
 			}
 
 			if ue.CmState == context.CmIdle {
+				if ue.MicoMode {
+					logger.SbiLog.Warnf("UE %s is in MICO mode, skipping paging for MBS session", supi)
+					continue
+				}
 				logger.SbiLog.Infof("Paging UE %s to make it reachable for MBS session", supi)
 				if s.ngapHandler != nil {
 					if err := s.ngapHandler.SendPaging(ue); err != nil {

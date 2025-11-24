@@ -169,6 +169,7 @@ type RegistrationRequestMsg struct {
 	LastVisitedTAI        []byte
 	UENetworkCapability   []byte
 	AdditionalGUTI        []byte
+	MicoIndication        bool
 }
 
 type RegistrationAcceptMsg struct {
@@ -179,6 +180,8 @@ type RegistrationAcceptMsg struct {
 	T3512Value            []byte
 	T3502Value            []byte
 	EmergencyNumberList   []byte
+	MicoIndication        bool
+	NetworkSlicingIndication bool
 }
 
 type RegistrationRejectMsg struct {
@@ -402,6 +405,20 @@ func DecodeRegistrationRequest(payload []byte) (*RegistrationRequestMsg, error) 
 			msg.RequestedNSSAI = payload[offset : offset+length]
 			offset += length
 
+		case IEI5GMMCapability:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid 5GMM capability length")
+			}
+			if length > 0 && (payload[offset]&0x01) == 0x01 {
+				msg.MicoIndication = true
+			}
+			offset += length
+
 		default:
 			if offset >= len(payload) {
 				return msg, nil
@@ -568,6 +585,14 @@ func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
 		payload = append(payload, IEIT3502Value)
 		payload = append(payload, uint8(len(msg.T3502Value)))
 		payload = append(payload, msg.T3502Value...)
+	}
+
+	if msg.MicoIndication {
+		payload = append(payload, 0xB0)
+	}
+
+	if msg.NetworkSlicingIndication {
+		payload = append(payload, 0x90)
 	}
 
 	return payload

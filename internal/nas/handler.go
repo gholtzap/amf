@@ -95,6 +95,11 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	ue.RegistrationType = regReq.RegistrationType
 	ue.NgKsi = int(regReq.NgKSI)
 	ue.IsEmergencyRegistration = (regReq.RegistrationType == RegistrationTypeEmergency)
+	ue.MicoMode = regReq.MicoIndication
+
+	if ue.MicoMode {
+		logger.NasLog.Infof("UE requested MICO mode")
+	}
 
 	var existingUe *context.UEContext
 	isGutiRegistration := false
@@ -571,6 +576,7 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 		MobileIdentity:    EncodeGutiMobileIdentity(ue.Guti),
 		AllowedNSSAI:      []byte{0x01, 0x01, 0x01},
 		T3512Value:        []byte{0x5e, 0x01, 0x3c},
+		MicoIndication:    ue.MicoMode,
 	}
 
 	payload := EncodeRegistrationAccept(msg)

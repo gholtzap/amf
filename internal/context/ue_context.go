@@ -51,6 +51,7 @@ type UEContext struct {
 	AccessType       AccessType
 	CmState          CmState // Connection Management State
 	RmState          RmState // Registration Management State
+	MicoMode         bool    // Mobile Initiated Connection Only mode
 
 	// Timers
 	T3502 *time.Timer // Deregistration attempt timer
