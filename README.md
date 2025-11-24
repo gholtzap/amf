@@ -106,6 +106,10 @@
 
 #### Namf_EventExposure
 - Event subscription Create/Delete/Modify
+- Event notifications (callback implementation)
+  - Registration state report
+  - Connectivity state report
+  - Reachability report
 
 #### Namf_Location
 - Provide Location Info
@@ -184,12 +188,10 @@
 - N2 Info Transfer result notification
 
 #### Namf_EventExposure
-- Event notifications (callback implementation)
-- Location reporting
-- UE reachability events
-- Loss of connectivity events
+- Location reporting (periodic and event-driven)
 - UE mobility events
 - Communication failure events
+- Loss of connectivity events
 
 #### Namf_Location
 - Event-driven location reporting

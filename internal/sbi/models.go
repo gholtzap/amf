@@ -365,10 +365,43 @@ type AmfCreatedEventSubscription struct {
 }
 
 type AmfEventReport struct {
-	Type      string `json:"type"`
-	State     string `json:"state,omitempty"`
-	TimeStamp string `json:"timeStamp,omitempty"`
-	Supi      string `json:"supi,omitempty"`
+	Type                string                 `json:"type"`
+	State               *AmfEventState         `json:"state,omitempty"`
+	TimeStamp           string                 `json:"timeStamp,omitempty"`
+	Supi                string                 `json:"supi,omitempty"`
+	Gpsi                string                 `json:"gpsi,omitempty"`
+	Pei                 string                 `json:"pei,omitempty"`
+	Location            *UserLocation          `json:"location,omitempty"`
+	Timezone            string                 `json:"timezone,omitempty"`
+	AccessTypeList      []string               `json:"accessTypeList,omitempty"`
+	RmInfoList          []RmInfo               `json:"rmInfoList,omitempty"`
+	CmInfoList          []CmInfo               `json:"cmInfoList,omitempty"`
+	Reachability        string                 `json:"reachability,omitempty"`
+	CommFailure         *CommunicationFailure  `json:"commFailure,omitempty"`
+	LossOfConnectType   string                 `json:"lossOfConnectType,omitempty"`
+	NumberOfUes         int32                  `json:"numberOfUes,omitempty"`
+	AreaList            []AmfEventArea         `json:"areaList,omitempty"`
+}
+
+type AmfEventState struct {
+	Active         bool  `json:"active"`
+	RemainReports  int32 `json:"remainReports,omitempty"`
+	RemainDuration int32 `json:"remainDuration,omitempty"`
+}
+
+type RmInfo struct {
+	RmState    string `json:"rmState"`
+	AccessType string `json:"accessType"`
+}
+
+type CmInfo struct {
+	CmState    string `json:"cmState"`
+	AccessType string `json:"accessType"`
+}
+
+type CommunicationFailure struct {
+	NasReleaseCode string `json:"nasReleaseCode,omitempty"`
+	RanReleaseCode string `json:"ranReleaseCode,omitempty"`
 }
 
 type AmfUpdateEventSubscriptionItem struct {

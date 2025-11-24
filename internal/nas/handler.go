@@ -582,11 +582,14 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	}
 
 	ue.RegistrationState = context.RegStateRegistered
+	ue.RmState = context.RmRegistered
 	logger.NasLog.Infof("UE %s successfully registered", ue.Supi)
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
+
+	h.notifyRegistrationStateChange(ue)
 
 	h.startT3550(ue)
 
@@ -661,6 +664,8 @@ func (h *Handler) HandleDeregistrationRequest(ue *context.UEContext, payload []b
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
 	}
 
+	h.notifyRegistrationStateChange(ue)
+
 	pdu := &NASPDU{
 		ProtocolDiscriminator: ProtocolDiscriminator5GMM,
 		SecurityHeaderType:    SecurityHeaderTypePlainNAS,
@@ -703,6 +708,8 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 
 	ue.CmState = context.CmConnected
 	ue.StopT3513()
+
+	h.notifyConnectivityStateChange(ue)
 
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {
@@ -821,6 +828,8 @@ func (h *Handler) HandleExtendedServiceRequest(ue *context.UEContext, payload []
 
 	ue.CmState = context.CmConnected
 	ue.StopT3513()
+
+	h.notifyConnectivityStateChange(ue)
 
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {
@@ -1844,4 +1853,67 @@ type TimerConfig struct {
 func (h *Handler) StartPagingTimer(ue *context.UEContext) error {
 	h.startT3513(ue)
 	return nil
+}
+
+func (h *Handler) notifyRegistrationStateChange(ue *context.UEContext) {
+	if ue.Supi == "" {
+		return
+	}
+
+	eventType := "REGISTRATION_STATE_REPORT"
+	rmState := "REGISTERED"
+	if ue.RmState == context.RmDeregistered {
+		rmState = "DEREGISTERED"
+	}
+
+	additionalData := map[string]interface{}{
+		"rmState": rmState,
+	}
+
+	h.notifyEvent(eventType, ue.Supi, additionalData)
+}
+
+func (h *Handler) notifyConnectivityStateChange(ue *context.UEContext) {
+	if ue.Supi == "" {
+		return
+	}
+
+	eventType := "CONNECTIVITY_STATE_REPORT"
+	cmState := "CONNECTED"
+	if ue.CmState == context.CmIdle {
+		cmState = "IDLE"
+	}
+
+	additionalData := map[string]interface{}{
+		"cmState": cmState,
+	}
+
+	h.notifyEvent(eventType, ue.Supi, additionalData)
+}
+
+func (h *Handler) notifyReachabilityChange(ue *context.UEContext, reachable bool) {
+	if ue.Supi == "" {
+		return
+	}
+
+	eventType := "REACHABILITY_REPORT"
+	reachability := "REACHABLE"
+	if !reachable {
+		reachability = "UNREACHABLE"
+	}
+
+	additionalData := map[string]interface{}{
+		"reachability": reachability,
+	}
+
+	h.notifyEvent(eventType, ue.Supi, additionalData)
+}
+
+func (h *Handler) notifyEvent(eventType string, supi string, additionalData map[string]interface{}) {
+	subscriptions := h.amfContext.GetAllEventSubscriptions()
+	if len(subscriptions) == 0 {
+		return
+	}
+
+	logger.NasLog.Debugf("Triggering %s event for SUPI %s", eventType, supi)
 }

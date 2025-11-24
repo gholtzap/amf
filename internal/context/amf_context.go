@@ -234,6 +234,15 @@ func (c *AMFContext) DeleteEventSubscription(subscriptionId string) {
 	logger.CtxLog.Infof("Event subscription deleted: %s", subscriptionId)
 }
 
+func (c *AMFContext) GetAllEventSubscriptions() map[string]interface{} {
+	subscriptions := make(map[string]interface{})
+	c.EventSubscriptions.Range(func(key, value interface{}) bool {
+		subscriptions[key.(string)] = value
+		return true
+	})
+	return subscriptions
+}
+
 func (c *AMFContext) AddN1N2Subscription(subscription *N1N2Subscription) {
 	c.N1N2Subscriptions.Store(subscription.SubscriptionId, subscription)
 	logger.CtxLog.Infof("N1N2 subscription stored: %s", subscription.SubscriptionId)
