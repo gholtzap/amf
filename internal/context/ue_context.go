@@ -97,12 +97,21 @@ type UEContext struct {
 
 	// eDRX (Extended Discontinuous Reception)
 	EDrxParameters *EDrxParameters
+
+	// PSM (Power Saving Mode)
+	PSMParameters *PSMParameters
 }
 
 type EDrxParameters struct {
 	EDrxValue      uint8
 	PagingTimeWindow uint8
 	Enabled        bool
+}
+
+type PSMParameters struct {
+	T3324Value uint8
+	T3412ExtendedValue uint8
+	Enabled bool
 }
 
 // RegistrationState represents UE registration state

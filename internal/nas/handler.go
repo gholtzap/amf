@@ -115,6 +115,21 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 			eDrxParams.EDrxValue, eDrxParams.PagingTimeWindow)
 	}
 
+	if len(regReq.RequestedT3324Value) > 0 || len(regReq.RequestedT3412ExtendedValue) > 0 {
+		psmParams := &context.PSMParameters{
+			Enabled: true,
+		}
+		if len(regReq.RequestedT3324Value) > 0 {
+			psmParams.T3324Value = regReq.RequestedT3324Value[0]
+		}
+		if len(regReq.RequestedT3412ExtendedValue) > 0 {
+			psmParams.T3412ExtendedValue = regReq.RequestedT3412ExtendedValue[0]
+		}
+		ue.PSMParameters = psmParams
+		logger.NasLog.Infof("UE requested PSM: T3324=0x%02x, T3412ext=0x%02x",
+			psmParams.T3324Value, psmParams.T3412ExtendedValue)
+	}
+
 	var existingUe *context.UEContext
 	isGutiRegistration := false
 
@@ -600,6 +615,17 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 		}
 		logger.NasLog.Infof("Sending negotiated eDRX parameters: value=0x%02x, PTW=0x%02x",
 			ue.EDrxParameters.EDrxValue, ue.EDrxParameters.PagingTimeWindow)
+	}
+
+	if ue.PSMParameters != nil && ue.PSMParameters.Enabled {
+		if ue.PSMParameters.T3324Value > 0 {
+			msg.T3324Value = []byte{ue.PSMParameters.T3324Value}
+		}
+		if ue.PSMParameters.T3412ExtendedValue > 0 {
+			msg.T3412ExtendedValue = []byte{ue.PSMParameters.T3412ExtendedValue}
+		}
+		logger.NasLog.Infof("Sending PSM parameters: T3324=0x%02x, T3412ext=0x%02x",
+			ue.PSMParameters.T3324Value, ue.PSMParameters.T3412ExtendedValue)
 	}
 
 	payload := EncodeRegistrationAccept(msg)

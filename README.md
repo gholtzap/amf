@@ -149,6 +149,7 @@
 - TAI tracking
 - MICO mode (Mobile Initiated Connection Only)
 - eDRX (Extended Discontinuous Reception) power saving
+- PSM (Power Saving Mode) with T3324 and T3412 extended timers
 
 ## NOT IMPLEMENTED FEATURES
 
@@ -222,7 +223,6 @@
 - Protection of initial NAS message
 - Service gap control
 - Extended DRX
-- Power saving mode (PSM)
 - Restricted service area
 - Forbidden area management
 

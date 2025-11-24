@@ -73,6 +73,10 @@ const (
 	IEISSNSSAl                = 0x22
 	IEIRequestedEDrxParameters = 0x6e
 	IEINegotiatedEDrxParameters = 0x6e
+	IEIT3324Value = 0x6a
+	IEIT3412ExtendedValue = 0x5e
+	IEIRequestedT3324Value = 0x6a
+	IEIRequestedT3412ExtendedValue = 0x73
 )
 
 const (
@@ -173,6 +177,8 @@ type RegistrationRequestMsg struct {
 	AdditionalGUTI        []byte
 	MicoIndication        bool
 	RequestedEDrxParameters []byte
+	RequestedT3324Value []byte
+	RequestedT3412ExtendedValue []byte
 }
 
 type RegistrationAcceptMsg struct {
@@ -186,6 +192,8 @@ type RegistrationAcceptMsg struct {
 	MicoIndication        bool
 	NetworkSlicingIndication bool
 	NegotiatedEDrxParameters []byte
+	T3324Value []byte
+	T3412ExtendedValue []byte
 }
 
 type RegistrationRejectMsg struct {
@@ -435,6 +443,30 @@ func DecodeRegistrationRequest(payload []byte) (*RegistrationRequestMsg, error) 
 			msg.RequestedEDrxParameters = payload[offset : offset+length]
 			offset += length
 
+		case IEIRequestedT3324Value:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested T3324 value length")
+			}
+			msg.RequestedT3324Value = payload[offset : offset+length]
+			offset += length
+
+		case IEIRequestedT3412ExtendedValue:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested T3412 extended value length")
+			}
+			msg.RequestedT3412ExtendedValue = payload[offset : offset+length]
+			offset += length
+
 		default:
 			if offset >= len(payload) {
 				return msg, nil
@@ -615,6 +647,18 @@ func EncodeRegistrationAccept(msg *RegistrationAcceptMsg) []byte {
 
 	if msg.NetworkSlicingIndication {
 		payload = append(payload, 0x90)
+	}
+
+	if len(msg.T3324Value) > 0 {
+		payload = append(payload, IEIT3324Value)
+		payload = append(payload, uint8(len(msg.T3324Value)))
+		payload = append(payload, msg.T3324Value...)
+	}
+
+	if len(msg.T3412ExtendedValue) > 0 {
+		payload = append(payload, IEIT3412ExtendedValue)
+		payload = append(payload, uint8(len(msg.T3412ExtendedValue)))
+		payload = append(payload, msg.T3412ExtendedValue...)
 	}
 
 	return payload
