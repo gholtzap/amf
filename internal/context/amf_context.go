@@ -284,6 +284,15 @@ func (c *AMFContext) DeleteN1N2Subscription(subscriptionId string) {
 func (c *AMFContext) StoreAMFStatusSubscription(subscriptionId string, subscription interface{}) {
 	c.AMFStatusSubscriptions.Store(subscriptionId, subscription)
 	logger.CtxLog.Infof("AMF status subscription stored: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		data := make(map[string]interface{})
+		data["subscriptionId"] = subscriptionId
+		data["subscription"] = subscription
+		if err := c.SubscriptionRepo.SaveAMFStatusSubscription(subscriptionId, data); err != nil {
+			logger.CtxLog.Errorf("Failed to persist AMF status subscription: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) GetAMFStatusSubscription(subscriptionId string) (interface{}, bool) {
@@ -293,6 +302,21 @@ func (c *AMFContext) GetAMFStatusSubscription(subscriptionId string) (interface{
 func (c *AMFContext) DeleteAMFStatusSubscription(subscriptionId string) {
 	c.AMFStatusSubscriptions.Delete(subscriptionId)
 	logger.CtxLog.Infof("AMF status subscription deleted: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.DeleteAMFStatusSubscription(subscriptionId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete AMF status subscription from database: %v", err)
+		}
+	}
+}
+
+func (c *AMFContext) GetAllAMFStatusSubscriptions() map[string]interface{} {
+	subscriptions := make(map[string]interface{})
+	c.AMFStatusSubscriptions.Range(func(key, value interface{}) bool {
+		subscriptions[key.(string)] = value
+		return true
+	})
+	return subscriptions
 }
 
 type N1N2Subscription struct {

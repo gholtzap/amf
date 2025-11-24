@@ -103,6 +103,7 @@
 - Cancel UE Context Relocation
 - Non-UE N2 Message Transfer subscriptions
 - AMF Status subscriptions
+- AMF Status Change Subscribe/Unsubscribe/Notify
 
 #### Namf_EventExposure
 - Event subscription Create/Delete/Modify
@@ -185,7 +186,6 @@
 #### Namf_Communication
 - UE Context transfer result notification
 - Non-UE N2 Info Unsubscribe
-- AMF Status Change Subscribe/Unsubscribe/Notify
 - N2 Info Transfer result notification
 
 #### Namf_EventExposure

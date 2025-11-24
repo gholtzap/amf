@@ -1,10 +1,12 @@
 package sbi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gavin/amf/internal/logger"
 )
@@ -226,4 +228,79 @@ func (s *Server) UpdateAMFStatusSubscription(subscriptionId string, updateData *
 
 	logger.SbiLog.Infof("AMF status change subscription updated successfully: %s", subscriptionId)
 	return updateData, nil
+}
+
+func (s *Server) NotifyAMFStatusChange(statusChange string, targetAmfRemoval string, targetAmfFailure string) {
+	logger.SbiLog.Infof("Notifying AMF status change: %s", statusChange)
+
+	guamiList := []Guami{}
+	for _, guami := range s.amfContext.ServedGuami {
+		guamiList = append(guamiList, Guami{
+			PlmnId: &PlmnId{
+				Mcc: guami.PlmnId.Mcc,
+				Mnc: guami.PlmnId.Mnc,
+			},
+			AmfId: guami.AmfId,
+		})
+	}
+
+	notification := &AmfStatusChangeNotification{
+		AmfStatusInfoList: []AmfStatusInfo{
+			{
+				GuamiList:        guamiList,
+				StatusChange:     statusChange,
+				TargetAmfRemoval: targetAmfRemoval,
+				TargetAmfFailure: targetAmfFailure,
+			},
+		},
+	}
+
+	subscriptions := s.amfContext.GetAllAMFStatusSubscriptions()
+
+	for subscriptionId, subscription := range subscriptions {
+		subData, ok := subscription.(*SubscriptionData)
+		if !ok {
+			logger.SbiLog.Warnf("Invalid subscription data format for ID: %s", subscriptionId)
+			continue
+		}
+
+		go s.sendAMFStatusNotification(subData.AmfStatusUri, notification)
+	}
+
+	logger.SbiLog.Infof("Sent AMF status change notifications to %d subscribers", len(subscriptions))
+}
+
+func (s *Server) sendAMFStatusNotification(callbackUri string, notification *AmfStatusChangeNotification) {
+	logger.SbiLog.Infof("Sending AMF status notification to: %s", callbackUri)
+
+	jsonData, err := json.Marshal(notification)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to marshal notification: %v", err)
+		return
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest(http.MethodPost, callbackUri, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to create HTTP request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to send notification to %s: %v", callbackUri, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logger.SbiLog.Infof("Successfully sent AMF status notification to: %s (status: %d)", callbackUri, resp.StatusCode)
+	} else {
+		logger.SbiLog.Warnf("Failed to send notification to %s, status code: %d", callbackUri, resp.StatusCode)
+	}
 }
