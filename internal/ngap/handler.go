@@ -5,6 +5,7 @@ import (
 
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/logger"
+	"github.com/gavin/amf/internal/sbi"
 )
 
 type Handler struct {
@@ -280,6 +281,7 @@ func (h *Handler) HandleUEContextReleaseRequest(ranContext *context.RANContext, 
 	logger.NgapLog.Info("Handling UE Context Release Request")
 
 	var amfUeNgapId int64
+	var cause *Cause
 
 	for _, ie := range pdu.IEs {
 		if ie.Id == ProtocolIEIDAMFUENGAPID {
@@ -287,11 +289,29 @@ func (h *Handler) HandleUEContextReleaseRequest(ranContext *context.RANContext, 
 				amfUeNgapId = val
 			}
 		}
+		if ie.Id == ProtocolIEIDCause {
+			if c, ok := ie.Value.(*Cause); ok {
+				cause = c
+			}
+		}
 	}
 
 	ue, ok := h.amfContext.GetUEContextByAmfUeNgapId(amfUeNgapId)
 	if !ok {
 		return fmt.Errorf("UE context not found for AMF UE NGAP ID: %d", amfUeNgapId)
+	}
+
+	isLossOfConnectivity := false
+	if cause != nil {
+		logger.NgapLog.Infof("UE Context Release Cause: Group=%d, Value=%d", cause.CauseGroup, cause.CauseValue)
+
+		isLossOfConnectivity = (cause.CauseGroup == 0 && (cause.CauseValue == 0 || cause.CauseValue == 2 || cause.CauseValue == 15)) ||
+			(cause.CauseGroup == 1)
+	}
+
+	if isLossOfConnectivity && ue.Supi != "" {
+		logger.NgapLog.Infof("Loss of connectivity detected for UE SUPI: %s", ue.Supi)
+		h.notifyLossOfConnectivity(ue)
 	}
 
 	ue.CmState = context.CmIdle
@@ -1997,4 +2017,20 @@ func parsePDUSessionResourceAdmittedList(data []byte) []PDUSessionResourceAdmitt
 	}
 
 	return items
+}
+
+func (h *Handler) notifyLossOfConnectivity(ue *context.UEContext) {
+	if h.amfContext == nil || ue == nil {
+		return
+	}
+
+	additionalData := map[string]interface{}{
+		"cmState": string(context.CmIdle),
+	}
+
+	if ue.Pei != "" {
+		additionalData["pei"] = ue.Pei
+	}
+
+	sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeLossOfConnectivity, ue.Supi, additionalData)
 }

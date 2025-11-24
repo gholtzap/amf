@@ -13,7 +13,10 @@
       "Bash(git restore:*)",
       "Bash(rm:*)",
       "Bash(dir:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(find:*)",
+      "Bash(powershell -Command \"(Get-Content ''c:\\Users\\Gavin\\dev\\telco\\amf\\internal\\nas\\handler.go'' | Measure-Object -Line).Lines\")",
+      "Bash(powershell -Command \"(Get-Content ''c:\\Users\\Gavin\\dev\\telco\\amf\\internal\\ngap\\handler.go'' | Measure-Object -Line).Lines\")"
     ],
     "deny": [],
     "ask": []
