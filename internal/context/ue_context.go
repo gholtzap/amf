@@ -36,6 +36,7 @@ type UEContext struct {
 
 	// Location Info
 	Tai             Tai    // Tracking Area Identity
+	TaiList         []Tai  // List of allowed Tracking Area Identities
 	CellId          string
 
 	// Security Context
@@ -359,4 +360,25 @@ func (ue *UEContext) StopAllTimers() {
 	ue.StopT3517()
 	ue.StopT3522()
 	ue.StopTimer(&ue.T3502)
+}
+
+func (ue *UEContext) IsTaiInList(tai Tai) bool {
+	ue.mu.RLock()
+	defer ue.mu.RUnlock()
+
+	for _, t := range ue.TaiList {
+		if t.PlmnId.Mcc == tai.PlmnId.Mcc && t.PlmnId.Mnc == tai.PlmnId.Mnc && t.Tac == tai.Tac {
+			return true
+		}
+	}
+	return false
+}
+
+func (ue *UEContext) HasTaiChanged(newTai Tai) bool {
+	ue.mu.RLock()
+	defer ue.mu.RUnlock()
+
+	return !(ue.Tai.PlmnId.Mcc == newTai.PlmnId.Mcc &&
+		ue.Tai.PlmnId.Mnc == newTai.PlmnId.Mnc &&
+		ue.Tai.Tac == newTai.Tac)
 }

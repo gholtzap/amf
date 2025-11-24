@@ -176,6 +176,20 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 	   (regReq.RegistrationType == RegistrationTypePeriodicUpdate ||
 	    regReq.RegistrationType == RegistrationTypeMobilityUpdate) &&
 	   ue.SecurityContext != nil && ue.SecurityContext.Activated {
+
+		if regReq.RegistrationType == RegistrationTypeMobilityUpdate {
+			logger.NasLog.Infof("Processing Mobility Registration Update (Tracking Area Update) for UE %s", ue.Supi)
+			logger.NasLog.Infof("Current TAI: %+v", ue.Tai)
+
+			if !ue.IsTaiInList(ue.Tai) {
+				logger.NasLog.Infof("UE moved to new TAI outside allowed list - will provide updated TAI list")
+			} else {
+				logger.NasLog.Infof("UE TAI is in allowed list - confirming registration")
+			}
+		} else {
+			logger.NasLog.Infof("Processing Periodic Registration Update for UE %s", ue.Supi)
+		}
+
 		logger.NasLog.Infof("Skipping authentication for periodic/mobility update with existing context")
 		return h.SendRegistrationAccept(ue)
 	}
@@ -592,6 +606,28 @@ func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []by
 	return h.SendRegistrationAccept(ue)
 }
 
+func (h *Handler) buildTAIListForUE(ue *context.UEContext) []context.Tai {
+	taiList := make([]context.Tai, 0)
+
+	if ue.RanContext == nil {
+		return taiList
+	}
+
+	for _, supportedTai := range ue.RanContext.SupportedTAList {
+		taiList = append(taiList, supportedTai.Tai)
+	}
+
+	if len(taiList) == 0 && ue.Tai.Tac != "" {
+		taiList = append(taiList, ue.Tai)
+	}
+
+	if len(taiList) > 16 {
+		taiList = taiList[:16]
+	}
+
+	return taiList
+}
+
 func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	logger.NasLog.Infof("Sending Registration Accept to UE")
 
@@ -600,9 +636,16 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 		logger.NasLog.Infof("Allocated GUTI for UE: %+v", ue.Guti)
 	}
 
+	taiList := h.buildTAIListForUE(ue)
+	if len(taiList) > 0 {
+		ue.TaiList = taiList
+		logger.NasLog.Infof("Assigned TAI list with %d TAIs to UE", len(taiList))
+	}
+
 	msg := &RegistrationAcceptMsg{
 		RegistrationResult: 0x01,
 		MobileIdentity:    EncodeGutiMobileIdentity(ue.Guti),
+		TAIList:           EncodeServiceAreaList(taiList),
 		AllowedNSSAI:      []byte{0x01, 0x01, 0x01},
 		T3512Value:        []byte{0x5e, 0x01, 0x3c},
 		MicoIndication:    ue.MicoMode,

@@ -1413,13 +1413,23 @@ func (h *Handler) HandlePathSwitchRequest(ranContext *context.RANContext, pdu *N
 	ranContext.AddUE(ranUeNgapId, ue)
 
 	if userLocationInfo != nil && userLocationInfo.TAI != nil {
-		ue.Tai = context.Tai{
+		newTai := context.Tai{
 			PlmnId: context.PlmnId{
 				Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
 				Mnc: "01",
 			},
 			Tac: string(userLocationInfo.TAI.TAC),
 		}
+
+		taiChanged := ue.HasTaiChanged(newTai)
+		if taiChanged {
+			logger.NgapLog.Infof("UE TAI changed from %+v to %+v", ue.Tai, newTai)
+			if !ue.IsTaiInList(newTai) {
+				logger.NgapLog.Infof("New TAI not in UE's allowed TAI list - Tracking Area Update needed")
+			}
+		}
+
+		ue.Tai = newTai
 		logger.NgapLog.Infof("Updated UE location: TAI=%+v", ue.Tai)
 	}
 
@@ -1511,13 +1521,23 @@ func (h *Handler) HandleLocationReport(ranContext *context.RANContext, pdu *NGAP
 
 	if userLocationInfo != nil {
 		if userLocationInfo.TAI != nil {
-			ue.Tai = context.Tai{
+			newTai := context.Tai{
 				PlmnId: context.PlmnId{
 					Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
 					Mnc: "01",
 				},
 				Tac: string(userLocationInfo.TAI.TAC),
 			}
+
+			taiChanged := ue.HasTaiChanged(newTai)
+			if taiChanged {
+				logger.NgapLog.Infof("UE TAI changed from %+v to %+v", ue.Tai, newTai)
+				if !ue.IsTaiInList(newTai) {
+					logger.NgapLog.Infof("New TAI not in UE's allowed TAI list - Tracking Area Update needed")
+				}
+			}
+
+			ue.Tai = newTai
 		}
 
 		if userLocationInfo.NRCGI != nil {
@@ -1815,13 +1835,23 @@ func (h *Handler) HandleHandoverNotify(ranContext *context.RANContext, pdu *NGAP
 	logger.NgapLog.Infof("Handover Notify received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d", amfUeNgapId, ranUeNgapId)
 
 	if userLocationInfo != nil && userLocationInfo.TAI != nil {
-		ue.Tai = context.Tai{
+		newTai := context.Tai{
 			PlmnId: context.PlmnId{
 				Mcc: string(userLocationInfo.TAI.PLMNIdentity[:3]),
 				Mnc: "01",
 			},
 			Tac: string(userLocationInfo.TAI.TAC),
 		}
+
+		taiChanged := ue.HasTaiChanged(newTai)
+		if taiChanged {
+			logger.NgapLog.Infof("UE TAI changed during handover from %+v to %+v", ue.Tai, newTai)
+			if !ue.IsTaiInList(newTai) {
+				logger.NgapLog.Infof("New TAI not in UE's allowed TAI list - Tracking Area Update needed")
+			}
+		}
+
+		ue.Tai = newTai
 		logger.NgapLog.Infof("Updated UE location after handover: TAC=%s", ue.Tai.Tac)
 	}
 

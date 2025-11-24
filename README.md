@@ -64,6 +64,7 @@
 - NITZ (Network Identity and Time Zone)
 - Authentication Request/Response/Reject/Failure
 - Identity Request/Response
+- Tracking Area Update
 
 #### 5G MM Timers
 - T3502 (Registration Reject timer)
@@ -167,7 +168,6 @@
 - Inter-AMF mobility
 - Inter-system mobility (4G/5G)
 - Idle mode mobility
-- Tracking Area Update
 
 #### Connection Management
 - Service Request with emergency fallback
