@@ -146,6 +146,7 @@
 - Multi-UE support
 - MongoDB persistence for UE contexts and subscriptions
 - Database restore on startup
+- Event subscription restore from database
 - Configuration management (JSON-based)
 - Logging infrastructure
 - Health check endpoint
@@ -235,7 +236,6 @@
 
 ### Database/Persistence
 - Subscription data persistence (partial)
-- Event subscription restore
 - N1N2 subscription persistence
 - AMF status subscription persistence
 - Backup/restore procedures

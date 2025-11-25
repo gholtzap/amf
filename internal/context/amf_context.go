@@ -223,6 +223,15 @@ func (c *AMFContext) AllocateGuti() *Guti {
 func (c *AMFContext) StoreEventSubscription(subscriptionId string, subscription interface{}) {
 	c.EventSubscriptions.Store(subscriptionId, subscription)
 	logger.CtxLog.Infof("Event subscription stored: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		data := make(map[string]interface{})
+		data["subscriptionId"] = subscriptionId
+		data["subscription"] = subscription
+		if err := c.SubscriptionRepo.SaveEventSubscription(subscriptionId, data); err != nil {
+			logger.CtxLog.Errorf("Failed to persist event subscription: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) GetEventSubscription(subscriptionId string) (interface{}, bool) {
@@ -232,6 +241,12 @@ func (c *AMFContext) GetEventSubscription(subscriptionId string) (interface{}, b
 func (c *AMFContext) DeleteEventSubscription(subscriptionId string) {
 	c.EventSubscriptions.Delete(subscriptionId)
 	logger.CtxLog.Infof("Event subscription deleted: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.DeleteEventSubscription(subscriptionId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete event subscription from database: %v", err)
+		}
+	}
 }
 
 func (c *AMFContext) GetAllEventSubscriptions() map[string]interface{} {
@@ -501,6 +516,27 @@ func (c *AMFContext) RestoreFromDatabase() error {
 	}
 
 	logger.CtxLog.Infof("Restored %d UE contexts from database", len(ueContexts))
+
+	if c.SubscriptionRepo != nil {
+		eventSubscriptions, err := c.SubscriptionRepo.FindAllEventSubscriptions()
+		if err != nil {
+			logger.CtxLog.Warnf("Failed to restore event subscriptions: %v", err)
+		} else {
+			for _, subscriptionData := range eventSubscriptions {
+				if doc, ok := subscriptionData.(map[string]interface{}); ok {
+					if subscriptionId, ok := doc["subscription_id"].(string); ok {
+						if data, ok := doc["data"].(map[string]interface{}); ok {
+							if subscription, ok := data["subscription"]; ok {
+								c.EventSubscriptions.Store(subscriptionId, subscription)
+							}
+						}
+					}
+				}
+			}
+			logger.CtxLog.Infof("Restored %d event subscriptions from database", len(eventSubscriptions))
+		}
+	}
+
 	return nil
 }
 
