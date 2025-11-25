@@ -3,6 +3,7 @@ package sbi
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/logger"
@@ -23,7 +24,43 @@ func (s *Server) N1N2MessageTransfer(ueContextId string, reqData *N1N2MessageTra
 	}
 
 	if ue.CmState != context.CmConnected {
-		logger.SbiLog.Warnf("UE %s not in CM-CONNECTED state", ueContextId)
+		logger.SbiLog.Warnf("UE %s not in CM-CONNECTED state, triggering paging", ueContextId)
+
+		var n1MessageContent []byte
+		var n2SmInfo []byte
+
+		if reqData.N1MessageContainer != nil && reqData.N1MessageContainer.N1MessageContent != nil {
+			contentId := reqData.N1MessageContainer.N1MessageContent.ContentId
+			if binaryData, ok := binaryParts[contentId]; ok {
+				n1MessageContent = binaryData
+			}
+		}
+
+		if reqData.N2InfoContainer != nil && reqData.N2InfoContainer.SmInfo != nil {
+			if reqData.N2InfoContainer.SmInfo.N2InfoContent != nil {
+				contentId := reqData.N2InfoContainer.SmInfo.N2InfoContent.ContentId
+				if binaryData, ok := binaryParts[contentId]; ok {
+					n2SmInfo = binaryData
+				}
+			}
+		}
+
+		pendingMsg := &context.PendingN1N2Message{
+			N1MessageContent: n1MessageContent,
+			N2SmInfo:         n2SmInfo,
+			PduSessionId:     reqData.PduSessionId,
+			Timestamp:        time.Now(),
+		}
+
+		ue.PendingMessages = append(ue.PendingMessages, pendingMsg)
+		logger.SbiLog.Infof("Queued N1N2 message for UE %s, pending messages: %d", ueContextId, len(ue.PendingMessages))
+
+		if s.ngapHandler != nil {
+			if err := s.ngapHandler.SendPaging(ue); err != nil {
+				logger.SbiLog.Errorf("Failed to send paging: %v", err)
+			}
+		}
+
 		return &N1N2MessageTransferRspData{
 			Cause: "ATTEMPTING_TO_REACH_UE",
 		}, nil

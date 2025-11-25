@@ -82,6 +82,7 @@
 
 ### NAS - SM (Session Management)
 - PDU Session Establishment Request/Accept/Reject
+- Network-requested PDU session establishment
 - PDU Session Release Request/Command/Complete
 - UL/DL NAS Transport for N1 SM messages
 - PDU session context management
@@ -183,7 +184,6 @@
 
 ### NAS SM Procedures
 - PDU Session Authentication
-- Network-requested PDU session establishment
 - QoS Flow management (detailed)
 - Reflective QoS
 - MPTCP support

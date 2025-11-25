@@ -810,6 +810,10 @@ func (h *Handler) HandleServiceRequest(ue *context.UEContext, payload []byte) er
 
 	h.notifyConnectivityStateChange(ue)
 
+	if err := h.DeliverPendingMessages(ue); err != nil {
+		logger.NasLog.Warnf("Failed to deliver pending messages: %v", err)
+	}
+
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {
 		logger.NasLog.Infof("PDU Session Status present in Service Request")
@@ -896,6 +900,42 @@ func (h *Handler) SendServiceReject(ue *context.UEContext, cause uint8) error {
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 
+func (h *Handler) DeliverPendingMessages(ue *context.UEContext) error {
+	if len(ue.PendingMessages) == 0 {
+		return nil
+	}
+
+	logger.NasLog.Infof("Delivering %d pending messages for UE SUPI: %s", len(ue.PendingMessages), ue.Supi)
+
+	for _, pendingMsg := range ue.PendingMessages {
+		logger.NasLog.Infof("Delivering pending message for PDU Session ID: %d", pendingMsg.PduSessionId)
+
+		if pendingMsg.N1MessageContent != nil {
+			if err := h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, pendingMsg.N1MessageContent); err != nil {
+				logger.NasLog.Errorf("Failed to deliver pending N1 message: %v", err)
+				continue
+			}
+		}
+
+		if pendingMsg.N2SmInfo != nil && pendingMsg.PduSessionId > 0 {
+			nasPdu := []byte{}
+			if err := h.ngapHandler.SendPDUSessionResourceSetupRequest(ue.RanUeNgapId, ue.AmfUeNgapId, uint8(pendingMsg.PduSessionId), nasPdu, pendingMsg.N2SmInfo); err != nil {
+				logger.NasLog.Errorf("Failed to deliver pending N2 message: %v", err)
+				continue
+			}
+		}
+	}
+
+	ue.PendingMessages = nil
+	logger.NasLog.Infof("All pending messages delivered for UE SUPI: %s", ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context after clearing pending messages: %v", err)
+	}
+
+	return nil
+}
+
 func (h *Handler) HandleExtendedServiceRequest(ue *context.UEContext, payload []byte) error {
 	logger.NasLog.Infof("Handle Extended Service Request for UE SUPI: %s", ue.Supi)
 
@@ -929,6 +969,10 @@ func (h *Handler) HandleExtendedServiceRequest(ue *context.UEContext, payload []
 	ue.StopT3513()
 
 	h.notifyConnectivityStateChange(ue)
+
+	if err := h.DeliverPendingMessages(ue); err != nil {
+		logger.NasLog.Warnf("Failed to deliver pending messages: %v", err)
+	}
 
 	activePduSessions := []uint8{}
 	if len(srvReq.PDUSessionStatus) > 0 {

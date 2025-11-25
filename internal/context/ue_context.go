@@ -104,6 +104,15 @@ type UEContext struct {
 
 	// PSM (Power Saving Mode)
 	PSMParameters *PSMParameters
+
+	PendingMessages []*PendingN1N2Message
+}
+
+type PendingN1N2Message struct {
+	N1MessageContent []byte
+	N2SmInfo         []byte
+	PduSessionId     int32
+	Timestamp        time.Time
 }
 
 type EDrxParameters struct {
