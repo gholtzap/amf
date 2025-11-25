@@ -68,17 +68,23 @@
 
 #### 5G MM Timers
 - T3502 (Registration Reject timer)
+- T3510 (Registration Request timer with retransmission)
+- T3511 (Registration failure timer)
 - T3512 (Periodic Registration Update timer)
 - T3513 (Paging timer with retransmission)
+- T3516 (5GMM status timer with retransmission)
 - T3517 (Service Accept timer with retransmission)
+- T3519 (Notification timer with retransmission)
+- T3520 (GUTI reallocation timer with retransmission)
+- T3521 (Deregistration request timer - UE-initiated)
 - T3522 (Deregistration timer with retransmission)
+- T3525 (Identity response timer)
 - T3540 (Deregistration request timer with retransmission)
 - T3550 (Registration Accept timer with retransmission)
 - T3555 (Configuration Update Command timer with retransmission)
 - T3560 (Authentication Request timer with retransmission)
 - T3565 (Security Mode Command timer with retransmission)
 - T3570 (Identity Request timer with retransmission)
-- T3519 (Notification timer with retransmission)
 
 ### NAS - SM (Session Management)
 - PDU Session Establishment Request/Accept/Reject
@@ -179,8 +185,6 @@
 - Service Request with emergency fallback
 - NAS transport reject
 
-#### 5G MM Timers
-- T3510, T3511, T3516, T3520, T3521, T3525
 
 ### NAS SM Procedures
 - PDU Session Authentication

@@ -137,6 +137,36 @@
       "expireTime": 6,
       "maxRetryTimes": 4
     },
+    "t3510": {
+      "enable": true,
+      "expireTime": 15,
+      "maxRetryTimes": 4
+    },
+    "t3511": {
+      "enable": true,
+      "expireTime": 10,
+      "maxRetryTimes": 1
+    },
+    "t3516": {
+      "enable": true,
+      "expireTime": 30,
+      "maxRetryTimes": 4
+    },
+    "t3520": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 4
+    },
+    "t3521": {
+      "enable": true,
+      "expireTime": 15,
+      "maxRetryTimes": 1
+    },
+    "t3525": {
+      "enable": true,
+      "expireTime": 6,
+      "maxRetryTimes": 1
+    },
     "eDrxParameters": {
       "enabled": true,
       "eDrxCycleLength": 5,

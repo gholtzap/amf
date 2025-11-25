@@ -1980,6 +1980,151 @@ func (h *Handler) startT3519(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3510(ue *context.UEContext) {
+	ue.StopT3510()
+
+	timerConfig := getTimerConfig("T3510")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3510Counter++
+	logger.NasLog.Infof("Starting T3510 timer (attempt %d/%d) for UE: %s",
+		ue.T3510Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3510 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3510 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3510Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3510Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Registration Accept for UE: %s", ue.Supi)
+			h.SendRegistrationAccept(ue)
+			h.startT3510(ue)
+		} else {
+			logger.NasLog.Errorf("T3510 max retries reached for UE: %s, registration procedure failed", ue.Supi)
+			ue.StopT3510()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "REGISTRATION_PROCEDURE_FAILURE")
+			}
+		}
+	})
+}
+
+func (h *Handler) startT3511(ue *context.UEContext) {
+	ue.StopT3511()
+
+	timerConfig := getTimerConfig("T3511")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3511Counter++
+	logger.NasLog.Infof("Starting T3511 timer for UE: %s (registration retry wait timer)",
+		ue.Supi)
+
+	ue.T3511 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Infof("T3511 timer expired for UE: %s, UE may retry registration", ue.Supi)
+		ue.StopT3511()
+	})
+}
+
+func (h *Handler) startT3516(ue *context.UEContext) {
+	ue.StopT3516()
+
+	timerConfig := getTimerConfig("T3516")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3516Counter++
+	logger.NasLog.Infof("Starting T3516 timer (attempt %d/%d) for UE: %s",
+		ue.T3516Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3516 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3516 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3516Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3516Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retrying 5GMM Status procedure for UE: %s", ue.Supi)
+			h.startT3516(ue)
+		} else {
+			logger.NasLog.Errorf("T3516 max retries reached for UE: %s", ue.Supi)
+			ue.StopT3516()
+		}
+	})
+}
+
+func (h *Handler) startT3520(ue *context.UEContext) {
+	ue.StopT3520()
+
+	timerConfig := getTimerConfig("T3520")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3520Counter++
+	logger.NasLog.Infof("Starting T3520 timer (attempt %d/%d) for UE: %s",
+		ue.T3520Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3520 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3520 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3520Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3520Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting GUTI reallocation for UE: %s", ue.Supi)
+			if ue.Guti != nil {
+				h.SendConfigurationUpdateCommand(ue, ue.Guti)
+			}
+			h.startT3520(ue)
+		} else {
+			logger.NasLog.Errorf("T3520 max retries reached for UE: %s, GUTI reallocation failed", ue.Supi)
+			ue.StopT3520()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "GUTI_REALLOCATION_FAILURE")
+			}
+		}
+	})
+}
+
+func (h *Handler) startT3521(ue *context.UEContext) {
+	ue.StopT3521()
+
+	timerConfig := getTimerConfig("T3521")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3521Counter++
+	logger.NasLog.Infof("Starting T3521 timer for UE: %s (UE deregistration request wait timer)",
+		ue.Supi)
+
+	ue.T3521 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3521 timer expired for UE: %s, deregistration request not received", ue.Supi)
+		ue.StopT3521()
+	})
+}
+
+func (h *Handler) startT3525(ue *context.UEContext) {
+	ue.StopT3525()
+
+	timerConfig := getTimerConfig("T3525")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3525Counter++
+	logger.NasLog.Infof("Starting T3525 timer for UE: %s (identity response wait timer)",
+		ue.Supi)
+
+	ue.T3525 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3525 timer expired for UE: %s, identity response not received", ue.Supi)
+		ue.StopT3525()
+		if h.ngapHandler != nil && ue.Supi != "" {
+			h.ngapHandler.NotifyCommunicationFailure(ue, "IDENTITY_RESPONSE_TIMEOUT")
+		}
+	})
+}
+
 func getTimerConfig(timerName string) *TimerConfig {
 	cfg := factory.GetConfig()
 	if cfg == nil || cfg.Configuration == nil {
@@ -2008,6 +2153,18 @@ func getTimerConfig(timerName string) *TimerConfig {
 		timerValue = cfg.Configuration.T3570
 	case "T3519":
 		timerValue = cfg.Configuration.T3519
+	case "T3510":
+		timerValue = cfg.Configuration.T3510
+	case "T3511":
+		timerValue = cfg.Configuration.T3511
+	case "T3516":
+		timerValue = cfg.Configuration.T3516
+	case "T3520":
+		timerValue = cfg.Configuration.T3520
+	case "T3521":
+		timerValue = cfg.Configuration.T3521
+	case "T3525":
+		timerValue = cfg.Configuration.T3525
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
 	}

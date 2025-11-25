@@ -68,6 +68,12 @@ type UEContext struct {
 	T3565 *time.Timer // Security Mode Command timer
 	T3570 *time.Timer // Identity Request timer
 	T3519 *time.Timer // Notification timer
+	T3510 *time.Timer // Registration Request timer
+	T3511 *time.Timer // Registration failure timer
+	T3516 *time.Timer // 5GMM status timer
+	T3520 *time.Timer // GUTI reallocation timer
+	T3521 *time.Timer // Deregistration request timer (UE-initiated)
+	T3525 *time.Timer // Identity response timer
 
 	// Timer retry counters
 	T3550Counter int
@@ -80,6 +86,12 @@ type UEContext struct {
 	T3517Counter int
 	T3522Counter int
 	T3519Counter int
+	T3510Counter int
+	T3511Counter int
+	T3516Counter int
+	T3520Counter int
+	T3521Counter int
+	T3525Counter int
 
 	// Deregistration request state for T3540 retransmission
 	DeregType              uint8
@@ -365,6 +377,36 @@ func (ue *UEContext) StopT3519() {
 	ue.T3519Counter = 0
 }
 
+func (ue *UEContext) StopT3510() {
+	ue.StopTimer(&ue.T3510)
+	ue.T3510Counter = 0
+}
+
+func (ue *UEContext) StopT3511() {
+	ue.StopTimer(&ue.T3511)
+	ue.T3511Counter = 0
+}
+
+func (ue *UEContext) StopT3516() {
+	ue.StopTimer(&ue.T3516)
+	ue.T3516Counter = 0
+}
+
+func (ue *UEContext) StopT3520() {
+	ue.StopTimer(&ue.T3520)
+	ue.T3520Counter = 0
+}
+
+func (ue *UEContext) StopT3521() {
+	ue.StopTimer(&ue.T3521)
+	ue.T3521Counter = 0
+}
+
+func (ue *UEContext) StopT3525() {
+	ue.StopTimer(&ue.T3525)
+	ue.T3525Counter = 0
+}
+
 func (ue *UEContext) StopAllTimers() {
 	ue.StopT3550()
 	ue.StopT3555()
@@ -377,6 +419,12 @@ func (ue *UEContext) StopAllTimers() {
 	ue.StopT3517()
 	ue.StopT3522()
 	ue.StopT3519()
+	ue.StopT3510()
+	ue.StopT3511()
+	ue.StopT3516()
+	ue.StopT3520()
+	ue.StopT3521()
+	ue.StopT3525()
 	ue.StopTimer(&ue.T3502)
 }
 
