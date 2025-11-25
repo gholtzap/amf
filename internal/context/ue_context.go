@@ -67,6 +67,7 @@ type UEContext struct {
 	T3560 *time.Timer // Authentication Request timer
 	T3565 *time.Timer // Security Mode Command timer
 	T3570 *time.Timer // Identity Request timer
+	T3519 *time.Timer // Notification timer
 
 	// Timer retry counters
 	T3550Counter int
@@ -78,6 +79,7 @@ type UEContext struct {
 	T3513Counter int
 	T3517Counter int
 	T3522Counter int
+	T3519Counter int
 
 	// Deregistration request state for T3540 retransmission
 	DeregType              uint8
@@ -349,6 +351,11 @@ func (ue *UEContext) StopT3517() {
 	ue.T3517Counter = 0
 }
 
+func (ue *UEContext) StopT3519() {
+	ue.StopTimer(&ue.T3519)
+	ue.T3519Counter = 0
+}
+
 func (ue *UEContext) StopAllTimers() {
 	ue.StopT3550()
 	ue.StopT3555()
@@ -360,6 +367,7 @@ func (ue *UEContext) StopAllTimers() {
 	ue.StopT3513()
 	ue.StopT3517()
 	ue.StopT3522()
+	ue.StopT3519()
 	ue.StopTimer(&ue.T3502)
 }
 

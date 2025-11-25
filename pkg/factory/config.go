@@ -43,6 +43,7 @@ type Configuration struct {
 	T3560                           *TimerValue   `json:"t3560"`
 	T3565                           *TimerValue   `json:"t3565"`
 	T3570                           *TimerValue   `json:"t3570"`
+	T3519                           *TimerValue   `json:"t3519"`
 	EDrxParameters                  *EDrxConfig   `json:"eDrxParameters"`
 	NrfUri                          string        `json:"nrfUri"`
 	UdmUri                          string        `json:"udmUri"`

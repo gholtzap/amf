@@ -1907,6 +1907,35 @@ func (h *Handler) startT3517(ue *context.UEContext) {
 	})
 }
 
+func (h *Handler) startT3519(ue *context.UEContext) {
+	ue.StopT3519()
+
+	timerConfig := getTimerConfig("T3519")
+	if !timerConfig.Enable {
+		return
+	}
+
+	ue.T3519Counter++
+	logger.NasLog.Infof("Starting T3519 timer (attempt %d/%d) for UE: %s",
+		ue.T3519Counter, timerConfig.MaxRetryTimes, ue.Supi)
+
+	ue.T3519 = time.AfterFunc(time.Duration(timerConfig.ExpireTime)*time.Second, func() {
+		logger.NasLog.Warnf("T3519 timer expired for UE: %s (attempt %d/%d)",
+			ue.Supi, ue.T3519Counter, timerConfig.MaxRetryTimes)
+
+		if ue.T3519Counter < timerConfig.MaxRetryTimes {
+			logger.NasLog.Infof("Retransmitting Notification for UE: %s", ue.Supi)
+			h.startT3519(ue)
+		} else {
+			logger.NasLog.Errorf("T3519 max retries reached for UE: %s, notification failed", ue.Supi)
+			ue.StopT3519()
+			if h.ngapHandler != nil && ue.Supi != "" {
+				h.ngapHandler.NotifyCommunicationFailure(ue, "NOTIFICATION_FAILURE")
+			}
+		}
+	})
+}
+
 func getTimerConfig(timerName string) *TimerConfig {
 	cfg := factory.GetConfig()
 	if cfg == nil || cfg.Configuration == nil {
@@ -1933,6 +1962,8 @@ func getTimerConfig(timerName string) *TimerConfig {
 		timerValue = cfg.Configuration.T3565
 	case "T3570":
 		timerValue = cfg.Configuration.T3570
+	case "T3519":
+		timerValue = cfg.Configuration.T3519
 	default:
 		return &TimerConfig{Enable: false, ExpireTime: 6, MaxRetryTimes: 4}
 	}
