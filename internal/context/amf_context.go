@@ -382,14 +382,24 @@ func (c *AMFContext) GetAllNonUeN2InfoSubscriptions() map[string]interface{} {
 	return subscriptions
 }
 
+type Point struct {
+	Lat float64
+	Lon float64
+}
+
 type LocationSubscription struct {
 	SubscriptionId          string
 	UeContextId             string
 	LocationNotificationUri string
+	EventType               string
 	ReportingInterval       int32
 	MaximumNumberOfReports  int32
 	ReportCount             int32
 	StopTimer               chan struct{}
+	AreaEventInfo           interface{}
+	MotionEventInfo         interface{}
+	LastKnownLocation       *Point
+	LastReportTime          int64
 }
 
 func (c *AMFContext) StoreLocationSubscription(subscriptionId string, subscription *LocationSubscription) {

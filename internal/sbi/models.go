@@ -985,11 +985,34 @@ type RequestPosInfo struct {
 	ScheduledLocTime        string             `json:"scheduledLocTime,omitempty"`
 	ReliableLocReq          bool               `json:"reliableLocReq,omitempty"`
 	PeriodicEventInfo       *PeriodicEventInfo `json:"periodicEventInfo,omitempty"`
+	AreaEventInfo           *AreaEventInfo     `json:"areaEventInfo,omitempty"`
+	MotionEventInfo         *MotionEventInfo   `json:"motionEventInfo,omitempty"`
 }
 
 type PeriodicEventInfo struct {
 	ReportingInterval      int32 `json:"reportingInterval"`
 	MaximumNumberOfReports int32 `json:"maximumNumberOfReports,omitempty"`
+}
+
+type AreaEventInfo struct {
+	AreaDefinition        []GeographicArea `json:"areaDefinition"`
+	OccurrenceInfo        string           `json:"occurrenceInfo,omitempty"`
+	MinimumInterval       int32            `json:"minimumInterval,omitempty"`
+	MaximumInterval       int32            `json:"maximumInterval,omitempty"`
+	SamplingInterval      int32            `json:"samplingInterval,omitempty"`
+	ReportingDuration     int32            `json:"reportingDuration,omitempty"`
+	MaximumNumberOfReports int32           `json:"maximumNumberOfReports,omitempty"`
+	ReportingLocation     string           `json:"reportingLocation,omitempty"`
+}
+
+type MotionEventInfo struct {
+	LinearDistance         int32  `json:"linearDistance"`
+	OccurrenceInfo         string `json:"occurrenceInfo,omitempty"`
+	MinimumInterval        int32  `json:"minimumInterval,omitempty"`
+	MaximumInterval        int32  `json:"maximumInterval,omitempty"`
+	SamplingInterval       int32  `json:"samplingInterval,omitempty"`
+	ReportingDuration      int32  `json:"reportingDuration,omitempty"`
+	MaximumNumberOfReports int32  `json:"maximumNumberOfReports,omitempty"`
 }
 
 type CancelPosInfo struct {

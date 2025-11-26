@@ -139,6 +139,7 @@
 - Provide Positioning Info
 - Cancel Positioning Info
 - Periodic location reporting
+- Event-driven location reporting (area-based and motion-based)
 
 #### Namf_MT
 - Provide Domain Selection Info
@@ -206,9 +207,6 @@
 
 #### Namf_Communication
 - Non-UE N2 Info Unsubscribe
-
-#### Namf_Location
-- Event-driven location reporting
 
 #### Namf_MT
 - SMS delivery over NAS

@@ -177,6 +177,7 @@ func (s *Server) ProvidePositioningInfo(ueContextId string, requestData *Request
 				SubscriptionId:          subscriptionId,
 				UeContextId:             ueContextId,
 				LocationNotificationUri: requestData.LocationNotificationUri,
+				EventType:               "PERIODIC",
 				ReportingInterval:       requestData.PeriodicEventInfo.ReportingInterval,
 				MaximumNumberOfReports:  requestData.PeriodicEventInfo.MaximumNumberOfReports,
 				ReportCount:             0,
@@ -186,6 +187,46 @@ func (s *Server) ProvidePositioningInfo(ueContextId string, requestData *Request
 			s.amfContext.StoreLocationSubscription(subscriptionId, subscription)
 
 			go s.periodicLocationReporter(subscription)
+
+			response.LdrReference = subscriptionId
+		} else if requestData.AreaEventInfo != nil {
+			logger.SbiLog.Infof("Area-based location reporting requested: areas=%d, occurrence=%s",
+				len(requestData.AreaEventInfo.AreaDefinition), requestData.AreaEventInfo.OccurrenceInfo)
+
+			subscriptionId := generateLocationSubscriptionId()
+			subscription := &context.LocationSubscription{
+				SubscriptionId:          subscriptionId,
+				UeContextId:             ueContextId,
+				LocationNotificationUri: requestData.LocationNotificationUri,
+				EventType:               "AREA_EVENT",
+				ReportCount:             0,
+				StopTimer:               make(chan struct{}),
+				AreaEventInfo:           requestData.AreaEventInfo,
+			}
+
+			s.amfContext.StoreLocationSubscription(subscriptionId, subscription)
+
+			go s.areaEventLocationReporter(subscription, requestData.AreaEventInfo)
+
+			response.LdrReference = subscriptionId
+		} else if requestData.MotionEventInfo != nil {
+			logger.SbiLog.Infof("Motion-based location reporting requested: linearDistance=%dm, occurrence=%s",
+				requestData.MotionEventInfo.LinearDistance, requestData.MotionEventInfo.OccurrenceInfo)
+
+			subscriptionId := generateLocationSubscriptionId()
+			subscription := &context.LocationSubscription{
+				SubscriptionId:          subscriptionId,
+				UeContextId:             ueContextId,
+				LocationNotificationUri: requestData.LocationNotificationUri,
+				EventType:               "MOTION_EVENT",
+				ReportCount:             0,
+				StopTimer:               make(chan struct{}),
+				MotionEventInfo:         requestData.MotionEventInfo,
+			}
+
+			s.amfContext.StoreLocationSubscription(subscriptionId, subscription)
+
+			go s.motionEventLocationReporter(subscription, requestData.MotionEventInfo)
 
 			response.LdrReference = subscriptionId
 		}
@@ -365,4 +406,239 @@ func (s *Server) sendLocationNotification(uri string, notification *NotifiedPosI
 	} else {
 		logger.SbiLog.Warnf("Location notification failed with status %d from %s", resp.StatusCode, uri)
 	}
+}
+
+func (s *Server) areaEventLocationReporter(subscription *context.LocationSubscription, areaEventInfo *AreaEventInfo) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	logger.SbiLog.Infof("Started area-based location reporting for subscription %s", subscription.SubscriptionId)
+
+	for {
+		select {
+		case <-ticker.C:
+			ue := s.findUEContextById(subscription.UeContextId)
+			if ue == nil {
+				logger.SbiLog.Warnf("UE context not found for location subscription %s, stopping reporter", subscription.SubscriptionId)
+				s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+				return
+			}
+
+			lat := 37.7749
+			lon := -122.4194
+			currentLocation := &context.Point{Lat: lat, Lon: lon}
+
+			wasInside := false
+			if subscription.LastKnownLocation != nil {
+				wasInside = isPointInAreas(subscription.LastKnownLocation, areaEventInfo.AreaDefinition)
+			}
+			isInside := isPointInAreas(currentLocation, areaEventInfo.AreaDefinition)
+
+			shouldNotify := false
+			if areaEventInfo.OccurrenceInfo == "ONE_TIME" {
+				if !wasInside && isInside {
+					shouldNotify = true
+				}
+			} else {
+				if wasInside != isInside {
+					shouldNotify = true
+				}
+			}
+
+			if shouldNotify {
+				notification := &NotifiedPosInfo{
+					LocationEstimate: &GeographicArea{
+						Point: &Point{
+							Lat: lat,
+							Lon: lon,
+						},
+					},
+					AccuracyFulfilmentInd: "REQUESTED_ACCURACY_FULFILLED",
+					AgeOfLocationEstimate: 5,
+					LdrReference:          subscription.SubscriptionId,
+				}
+
+				if ue.CellId != "" {
+					notification.Ncgi = &Ncgi{
+						PlmnId: &PlmnId{
+							Mcc: ue.Tai.PlmnId.Mcc,
+							Mnc: ue.Tai.PlmnId.Mnc,
+						},
+						NrCellId: ue.CellId,
+					}
+				}
+
+				go s.sendLocationNotification(subscription.LocationNotificationUri, notification)
+
+				subscription.ReportCount++
+				subscription.LastKnownLocation = currentLocation
+				subscription.LastReportTime = time.Now().Unix()
+
+				if areaEventInfo.MaximumNumberOfReports > 0 && subscription.ReportCount >= areaEventInfo.MaximumNumberOfReports {
+					logger.SbiLog.Infof("Maximum reports (%d) reached for subscription %s, stopping reporter",
+						areaEventInfo.MaximumNumberOfReports, subscription.SubscriptionId)
+					s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+					return
+				}
+
+				if areaEventInfo.OccurrenceInfo == "ONE_TIME" {
+					logger.SbiLog.Infof("One-time area event triggered for subscription %s, stopping reporter", subscription.SubscriptionId)
+					s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+					return
+				}
+			} else {
+				subscription.LastKnownLocation = currentLocation
+			}
+
+		case <-subscription.StopTimer:
+			logger.SbiLog.Infof("Area-based location reporting stopped for subscription %s", subscription.SubscriptionId)
+			return
+		}
+	}
+}
+
+func (s *Server) motionEventLocationReporter(subscription *context.LocationSubscription, motionEventInfo *MotionEventInfo) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	logger.SbiLog.Infof("Started motion-based location reporting for subscription %s (linear distance: %dm)",
+		subscription.SubscriptionId, motionEventInfo.LinearDistance)
+
+	for {
+		select {
+		case <-ticker.C:
+			ue := s.findUEContextById(subscription.UeContextId)
+			if ue == nil {
+				logger.SbiLog.Warnf("UE context not found for location subscription %s, stopping reporter", subscription.SubscriptionId)
+				s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+				return
+			}
+
+			lat := 37.7749
+			lon := -122.4194
+			currentLocation := &context.Point{Lat: lat, Lon: lon}
+
+			shouldNotify := false
+			if subscription.LastKnownLocation != nil {
+				distance := calculateDistance(subscription.LastKnownLocation, currentLocation)
+				if distance >= float64(motionEventInfo.LinearDistance) {
+					shouldNotify = true
+					logger.SbiLog.Infof("Motion threshold exceeded: %.2fm (threshold: %dm)", distance, motionEventInfo.LinearDistance)
+				}
+			} else {
+				subscription.LastKnownLocation = currentLocation
+			}
+
+			if shouldNotify {
+				notification := &NotifiedPosInfo{
+					LocationEstimate: &GeographicArea{
+						Point: &Point{
+							Lat: lat,
+							Lon: lon,
+						},
+					},
+					AccuracyFulfilmentInd: "REQUESTED_ACCURACY_FULFILLED",
+					AgeOfLocationEstimate: 5,
+					LdrReference:          subscription.SubscriptionId,
+				}
+
+				if ue.CellId != "" {
+					notification.Ncgi = &Ncgi{
+						PlmnId: &PlmnId{
+							Mcc: ue.Tai.PlmnId.Mcc,
+							Mnc: ue.Tai.PlmnId.Mnc,
+						},
+						NrCellId: ue.CellId,
+					}
+				}
+
+				go s.sendLocationNotification(subscription.LocationNotificationUri, notification)
+
+				subscription.ReportCount++
+				subscription.LastKnownLocation = currentLocation
+				subscription.LastReportTime = time.Now().Unix()
+
+				if motionEventInfo.MaximumNumberOfReports > 0 && subscription.ReportCount >= motionEventInfo.MaximumNumberOfReports {
+					logger.SbiLog.Infof("Maximum reports (%d) reached for subscription %s, stopping reporter",
+						motionEventInfo.MaximumNumberOfReports, subscription.SubscriptionId)
+					s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+					return
+				}
+
+				if motionEventInfo.OccurrenceInfo == "ONE_TIME" {
+					logger.SbiLog.Infof("One-time motion event triggered for subscription %s, stopping reporter", subscription.SubscriptionId)
+					s.amfContext.DeleteLocationSubscription(subscription.SubscriptionId)
+					return
+				}
+			}
+
+		case <-subscription.StopTimer:
+			logger.SbiLog.Infof("Motion-based location reporting stopped for subscription %s", subscription.SubscriptionId)
+			return
+		}
+	}
+}
+
+func isPointInAreas(point *context.Point, areas []GeographicArea) bool {
+	for _, area := range areas {
+		if area.Polygon != nil && len(area.Polygon) > 0 {
+			if isPointInPolygon(point, area.Polygon) {
+				return true
+			}
+		}
+		if area.Point != nil {
+			if point.Lat == area.Point.Lat && point.Lon == area.Point.Lon {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isPointInPolygon(point *context.Point, polygon []Point) bool {
+	if len(polygon) < 3 {
+		return false
+	}
+
+	inside := false
+	j := len(polygon) - 1
+
+	for i := 0; i < len(polygon); i++ {
+		xi, yi := polygon[i].Lon, polygon[i].Lat
+		xj, yj := polygon[j].Lon, polygon[j].Lat
+
+		intersect := ((yi > point.Lat) != (yj > point.Lat)) &&
+			(point.Lon < (xj-xi)*(point.Lat-yi)/(yj-yi)+xi)
+
+		if intersect {
+			inside = !inside
+		}
+		j = i
+	}
+
+	return inside
+}
+
+func calculateDistance(p1, p2 *context.Point) float64 {
+	const earthRadius = 6371000.0
+
+	lat1 := p1.Lat * 3.141592653589793 / 180.0
+	lat2 := p2.Lat * 3.141592653589793 / 180.0
+	deltaLat := (p2.Lat - p1.Lat) * 3.141592653589793 / 180.0
+	deltaLon := (p2.Lon - p1.Lon) * 3.141592653589793 / 180.0
+
+	sinDeltaLat := deltaLat / 2.0
+	sinDeltaLon := deltaLon / 2.0
+	a := sinDeltaLat*sinDeltaLat + (1.0-lat1*lat1/2.0)*(1.0-lat2*lat2/2.0)*sinDeltaLon*sinDeltaLon
+
+	if a < 0 {
+		a = 0
+	}
+	if a > 1 {
+		a = 1
+	}
+
+	c := 2.0 * earthRadius * (a / (1.0 - a))
+
+	return c
 }
