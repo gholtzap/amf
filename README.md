@@ -179,6 +179,7 @@
 - MICO mode (Mobile Initiated Connection Only)
 - eDRX (Extended Discontinuous Reception) power saving
 - PSM (Power Saving Mode) with T3324 and T3412 extended timers
+- Forbidden area management
 
 ## NOT IMPLEMENTED FEATURES
 
@@ -231,7 +232,6 @@
 - Service gap control
 - Extended DRX
 - Restricted service area
-- Forbidden area management
 
 ### Security Features (Not Implemented)
 - Security context synchronization

@@ -15,6 +15,7 @@ type AMFContext struct {
 	GuamiList       []Guami
 	ServedGuami     []Guami
 	PlmnSupportList []PlmnSupport
+	ForbiddenTaiList []Tai
 
 	RelativeCapacity int32
 
@@ -147,6 +148,7 @@ func (c *AMFContext) NewUEContext(ranUeNgapId int64) *UEContext {
 		AmfUeNgapId:      c.allocateAmfUeNgapId(),
 		SecurityContext:  &SecurityContext{},
 		PduSessions:      make(map[int32]*PduSessionContext),
+		ForbiddenTaiList: append([]Tai{}, c.ForbiddenTaiList...),
 	}
 	c.UeContexts.Store(ue.AmfUeNgapId, ue)
 	logger.CtxLog.Infof("New UE Context created, AMF UE NGAP ID: %d", ue.AmfUeNgapId)

@@ -25,6 +25,7 @@ type Configuration struct {
 	ServiceNameList                 []string      `json:"serviceNameList"`
 	ServedGuamiList                 []ServedGuami `json:"servedGuamiList"`
 	SupportTaiList                  []SupportTai  `json:"supportTaiList"`
+	ForbiddenTaiList                []SupportTai  `json:"forbiddenTaiList,omitempty"`
 	PlmnSupportList                 []PlmnSupport `json:"plmnSupportList"`
 	SupportDnnList                  []string      `json:"supportDnnList"`
 	NfServices                      []NfService   `json:"nfServices"`

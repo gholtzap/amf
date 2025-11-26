@@ -184,6 +184,11 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 			logger.NasLog.Infof("Processing Mobility Registration Update (Tracking Area Update) for UE %s", ue.Supi)
 			logger.NasLog.Infof("Current TAI: %+v", ue.Tai)
 
+			if ue.IsTaiForbidden(ue.Tai) {
+				logger.NasLog.Warnf("UE in forbidden TAI: %+v - rejecting registration", ue.Tai)
+				return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
+			}
+
 			if !ue.IsTaiInList(ue.Tai) {
 				logger.NasLog.Infof("UE moved to new TAI outside allowed list - will provide updated TAI list")
 			} else {
@@ -637,6 +642,11 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 	if ue.Guti == nil {
 		ue.Guti = h.amfContext.AllocateGuti()
 		logger.NasLog.Infof("Allocated GUTI for UE: %+v", ue.Guti)
+	}
+
+	if ue.IsTaiForbidden(ue.Tai) {
+		logger.NasLog.Warnf("UE in forbidden TAI: %+v - rejecting registration", ue.Tai)
+		return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
 	}
 
 	taiList := h.buildTAIListForUE(ue)

@@ -38,6 +38,7 @@ type UEContext struct {
 	Tai             Tai    // Tracking Area Identity
 	LastTai         *Tai   // Previous Tracking Area Identity (for mobility detection)
 	TaiList         []Tai  // List of allowed Tracking Area Identities
+	ForbiddenTaiList []Tai // List of forbidden Tracking Area Identities
 	CellId          string
 	CurrentRNA      uint16   // Current RAN Notification Area
 	RNAList         []uint16 // List of configured RAN Notification Area IDs
@@ -452,6 +453,18 @@ func (ue *UEContext) IsTaiInList(tai Tai) bool {
 	defer ue.mu.RUnlock()
 
 	for _, t := range ue.TaiList {
+		if t.PlmnId.Mcc == tai.PlmnId.Mcc && t.PlmnId.Mnc == tai.PlmnId.Mnc && t.Tac == tai.Tac {
+			return true
+		}
+	}
+	return false
+}
+
+func (ue *UEContext) IsTaiForbidden(tai Tai) bool {
+	ue.mu.RLock()
+	defer ue.mu.RUnlock()
+
+	for _, t := range ue.ForbiddenTaiList {
 		if t.PlmnId.Mcc == tai.PlmnId.Mcc && t.PlmnId.Mnc == tai.PlmnId.Mnc && t.Tac == tai.Tac {
 			return true
 		}

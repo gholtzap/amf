@@ -95,6 +95,20 @@ func main() {
 		amfContext.PlmnSupportList = append(amfContext.PlmnSupportList, ps)
 	}
 
+	for _, forbiddenTai := range config.Configuration.ForbiddenTaiList {
+		tai := context.Tai{
+			PlmnId: context.PlmnId{
+				Mcc: forbiddenTai.PlmnId.Mcc,
+				Mnc: forbiddenTai.PlmnId.Mnc,
+			},
+			Tac: forbiddenTai.Tac,
+		}
+		amfContext.ForbiddenTaiList = append(amfContext.ForbiddenTaiList, tai)
+	}
+	if len(amfContext.ForbiddenTaiList) > 0 {
+		logger.MainLog.Infof("Loaded %d forbidden TAIs from configuration", len(amfContext.ForbiddenTaiList))
+	}
+
 	if config.Configuration.TimeZone != nil {
 		amfContext.TimeZoneOffsetMinutes = config.Configuration.TimeZone.TimeZoneOffsetMinutes
 		amfContext.DaylightSavingTime = config.Configuration.TimeZone.DaylightSavingTime
