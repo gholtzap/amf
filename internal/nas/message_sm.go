@@ -888,3 +888,238 @@ func BuildDefaultQoSRule(qfi uint8, reflectiveQos bool, rqTimer uint16) []byte {
 
 	return BuildQoSRules([]QoSRule{rule})
 }
+
+type QoSFlowDescription struct {
+	QFI           uint8
+	OperationCode uint8
+	FiveQI        uint8
+	GFBR_Uplink   uint32
+	GFBR_Downlink uint32
+	MFBR_Uplink   uint32
+	MFBR_Downlink uint32
+}
+
+const (
+	QoSFlowOperationCodeCreate = 0x01
+	QoSFlowOperationCodeDelete = 0x02
+	QoSFlowOperationCodeModify = 0x03
+)
+
+func ParseQoSFlowDescriptions(data []byte) ([]QoSFlowDescription, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	flows := make([]QoSFlowDescription, 0)
+	offset := 0
+
+	for offset < len(data) {
+		if offset >= len(data) {
+			break
+		}
+
+		flow := QoSFlowDescription{}
+		flow.QFI = data[offset] & 0x3F
+		offset++
+
+		if offset >= len(data) {
+			break
+		}
+
+		opCode := (data[offset] >> 5) & 0x07
+		flow.OperationCode = opCode
+		offset++
+
+		if flow.OperationCode == QoSFlowOperationCodeDelete {
+			flows = append(flows, flow)
+			continue
+		}
+
+		for offset < len(data) {
+			if offset >= len(data) {
+				break
+			}
+
+			paramId := data[offset]
+			offset++
+
+			if paramId == 0x01 {
+				if offset >= len(data) {
+					break
+				}
+				flow.FiveQI = data[offset]
+				offset++
+			} else if paramId == 0x02 {
+				if offset+3 >= len(data) {
+					break
+				}
+				flow.GFBR_Uplink = binary.BigEndian.Uint32([]byte{0, data[offset], data[offset+1], data[offset+2]})
+				offset += 3
+			} else if paramId == 0x03 {
+				if offset+3 >= len(data) {
+					break
+				}
+				flow.GFBR_Downlink = binary.BigEndian.Uint32([]byte{0, data[offset], data[offset+1], data[offset+2]})
+				offset += 3
+			} else if paramId == 0x04 {
+				if offset+3 >= len(data) {
+					break
+				}
+				flow.MFBR_Uplink = binary.BigEndian.Uint32([]byte{0, data[offset], data[offset+1], data[offset+2]})
+				offset += 3
+			} else if paramId == 0x05 {
+				if offset+3 >= len(data) {
+					break
+				}
+				flow.MFBR_Downlink = binary.BigEndian.Uint32([]byte{0, data[offset], data[offset+1], data[offset+2]})
+				offset += 3
+			} else {
+				break
+			}
+		}
+
+		flows = append(flows, flow)
+	}
+
+	return flows, nil
+}
+
+func ParseQoSRules(data []byte) ([]QoSRule, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	rules := make([]QoSRule, 0)
+	offset := 0
+
+	for offset < len(data) {
+		if offset >= len(data) {
+			break
+		}
+
+		rule := QoSRule{}
+		rule.Identifier = data[offset]
+		offset++
+
+		if offset+1 >= len(data) {
+			break
+		}
+
+		length := int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		offset += 2
+
+		if offset+length > len(data) {
+			break
+		}
+
+		ruleData := data[offset : offset+length]
+		offset += length
+
+		if len(ruleData) < 1 {
+			continue
+		}
+
+		dqrBit := (ruleData[0] >> 4) & 0x01
+		numFilters := int(ruleData[0] & 0x0f)
+
+		rule.ReflectiveQosActive = (dqrBit == 1)
+
+		ruleOffset := 1
+
+		for i := 0; i < numFilters && ruleOffset < len(ruleData); i++ {
+			if ruleOffset >= len(ruleData) {
+				break
+			}
+
+			filter := PacketFilter{}
+			filter.Direction = (ruleData[ruleOffset] >> 4) & 0x03
+			filter.Identifier = ruleData[ruleOffset] & 0x0f
+			ruleOffset++
+
+			if ruleOffset >= len(ruleData) {
+				break
+			}
+
+			filterLen := int(ruleData[ruleOffset])
+			ruleOffset++
+
+			if ruleOffset+filterLen > len(ruleData) {
+				break
+			}
+
+			if filterLen > 0 {
+				filter.ComponentType = ruleData[ruleOffset]
+				if filterLen > 1 {
+					filter.ComponentValue = ruleData[ruleOffset+1 : ruleOffset+filterLen]
+				}
+			}
+
+			ruleOffset += filterLen
+			rule.PacketFilterList = append(rule.PacketFilterList, filter)
+		}
+
+		if ruleOffset < len(ruleData) {
+			rule.Precedence = ruleData[ruleOffset]
+			ruleOffset++
+		}
+
+		if ruleOffset < len(ruleData) {
+			rule.QFI = ruleData[ruleOffset]
+			ruleOffset++
+		}
+
+		rules = append(rules, rule)
+	}
+
+	return rules, nil
+}
+
+func BuildQoSFlowDescriptions(flows []QoSFlowDescription) []byte {
+	if len(flows) == 0 {
+		return nil
+	}
+
+	result := make([]byte, 0)
+
+	for _, flow := range flows {
+		result = append(result, flow.QFI&0x3F)
+		result = append(result, (flow.OperationCode<<5))
+
+		if flow.OperationCode != QoSFlowOperationCodeDelete {
+			if flow.FiveQI > 0 {
+				result = append(result, 0x01)
+				result = append(result, flow.FiveQI)
+			}
+
+			if flow.GFBR_Uplink > 0 {
+				result = append(result, 0x02)
+				gfbrBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(gfbrBytes, flow.GFBR_Uplink)
+				result = append(result, gfbrBytes[1:]...)
+			}
+
+			if flow.GFBR_Downlink > 0 {
+				result = append(result, 0x03)
+				gfbrBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(gfbrBytes, flow.GFBR_Downlink)
+				result = append(result, gfbrBytes[1:]...)
+			}
+
+			if flow.MFBR_Uplink > 0 {
+				result = append(result, 0x04)
+				mfbrBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(mfbrBytes, flow.MFBR_Uplink)
+				result = append(result, mfbrBytes[1:]...)
+			}
+
+			if flow.MFBR_Downlink > 0 {
+				result = append(result, 0x05)
+				mfbrBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(mfbrBytes, flow.MFBR_Downlink)
+				result = append(result, mfbrBytes[1:]...)
+			}
+		}
+	}
+
+	return result
+}

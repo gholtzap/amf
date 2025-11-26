@@ -1446,12 +1446,51 @@ func (h *Handler) HandlePDUSessionModificationRequest(ue *context.UEContext, pdu
 
 	updateData := &consumer.SmContextUpdateData{}
 
+	var qosFlowDescs []QoSFlowDescription
+	var qosRules []QoSRule
+
 	if len(smReq.RequestedQoSRules) > 0 {
 		logger.NasLog.Infof("QoS Rules modification requested")
+		parsedRules, err := ParseQoSRules(smReq.RequestedQoSRules)
+		if err != nil {
+			logger.NasLog.Warnf("Failed to parse QoS rules: %v", err)
+		} else {
+			qosRules = parsedRules
+			logger.NasLog.Infof("Parsed %d QoS rules", len(qosRules))
+		}
 	}
 
 	if len(smReq.RequestedQoSFlowDescriptions) > 0 {
 		logger.NasLog.Infof("QoS Flow Descriptions modification requested")
+		parsedFlows, err := ParseQoSFlowDescriptions(smReq.RequestedQoSFlowDescriptions)
+		if err != nil {
+			logger.NasLog.Warnf("Failed to parse QoS flow descriptions: %v", err)
+		} else {
+			qosFlowDescs = parsedFlows
+			logger.NasLog.Infof("Parsed %d QoS flow descriptions", len(qosFlowDescs))
+
+			for _, flow := range qosFlowDescs {
+				switch flow.OperationCode {
+				case QoSFlowOperationCodeCreate:
+					logger.NasLog.Infof("Creating QoS flow QFI=%d, 5QI=%d", flow.QFI, flow.FiveQI)
+					qosFlow := pduSession.AddQosFlow(int(flow.QFI), int(flow.FiveQI))
+					if flow.GFBR_Uplink > 0 || flow.GFBR_Downlink > 0 {
+						if qosFlow.QosParameters == nil {
+							qosFlow.QosParameters = &context.QosParameters{}
+						}
+					}
+
+				case QoSFlowOperationCodeModify:
+					logger.NasLog.Infof("Modifying QoS flow QFI=%d, 5QI=%d", flow.QFI, flow.FiveQI)
+					params := &context.QosParameters{}
+					pduSession.ModifyQosFlow(int(flow.QFI), int(flow.FiveQI), params)
+
+				case QoSFlowOperationCodeDelete:
+					logger.NasLog.Infof("Deleting QoS flow QFI=%d", flow.QFI)
+					pduSession.DeleteQosFlow(int(flow.QFI))
+				}
+			}
+		}
 	}
 
 	updateResp, err := smfClient.UpdateSMContext(pduSession.SmContextRef, updateData)
@@ -1471,6 +1510,14 @@ func (h *Handler) HandlePDUSessionModificationRequest(ue *context.UEContext, pdu
 	commandMsg := &PDUSessionModificationCommandMsg{
 		QoSRules:    []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
 		SessionAMBR: []byte{0x3e, 0x80, 0x3e, 0x80},
+	}
+
+	if len(qosFlowDescs) > 0 {
+		commandMsg.QoSFlowDescriptions = BuildQoSFlowDescriptions(qosFlowDescs)
+	}
+
+	if len(qosRules) > 0 {
+		commandMsg.QoSRules = BuildQoSRules(qosRules)
 	}
 
 	smCommandPayload := EncodePDUSessionModificationCommand(commandMsg)
@@ -1530,6 +1577,83 @@ func (h *Handler) SendPDUSessionModificationReject(ue *context.UEContext, pduSes
 	if err != nil {
 		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
 	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) SendNetworkInitiatedQoSModification(ue *context.UEContext, pduSessionID uint8, qosFlows []QoSFlowDescription, qosRules []QoSRule) error {
+	logger.NasLog.Infof("Sending network-initiated QoS modification for PDU Session ID: %d", pduSessionID)
+
+	pduSession, ok := ue.GetPduSession(int32(pduSessionID))
+	if !ok {
+		logger.NasLog.Errorf("PDU Session %d not found for UE %s", pduSessionID, ue.Supi)
+		return fmt.Errorf("PDU session not found")
+	}
+
+	for _, flow := range qosFlows {
+		switch flow.OperationCode {
+		case QoSFlowOperationCodeCreate:
+			logger.NasLog.Infof("Network creating QoS flow QFI=%d, 5QI=%d", flow.QFI, flow.FiveQI)
+			qosFlow := pduSession.AddQosFlow(int(flow.QFI), int(flow.FiveQI))
+			if flow.GFBR_Uplink > 0 || flow.GFBR_Downlink > 0 {
+				if qosFlow.QosParameters == nil {
+					qosFlow.QosParameters = &context.QosParameters{}
+				}
+			}
+
+		case QoSFlowOperationCodeModify:
+			logger.NasLog.Infof("Network modifying QoS flow QFI=%d, 5QI=%d", flow.QFI, flow.FiveQI)
+			params := &context.QosParameters{}
+			pduSession.ModifyQosFlow(int(flow.QFI), int(flow.FiveQI), params)
+
+		case QoSFlowOperationCodeDelete:
+			logger.NasLog.Infof("Network deleting QoS flow QFI=%d", flow.QFI)
+			pduSession.DeleteQosFlow(int(flow.QFI))
+		}
+	}
+
+	commandMsg := &PDUSessionModificationCommandMsg{}
+
+	if len(qosFlows) > 0 {
+		commandMsg.QoSFlowDescriptions = BuildQoSFlowDescriptions(qosFlows)
+	}
+
+	if len(qosRules) > 0 {
+		commandMsg.QoSRules = BuildQoSRules(qosRules)
+	} else {
+		commandMsg.QoSRules = []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	}
+
+	commandMsg.SessionAMBR = []byte{0x3e, 0x80, 0x3e, 0x80}
+
+	smCommandPayload := EncodePDUSessionModificationCommand(commandMsg)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionModificationCommand)
+	smPDU = append(smPDU, smCommandPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	logger.NasLog.Infof("Network-initiated QoS modification sent for PDU Session ID: %d", pduSessionID)
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }

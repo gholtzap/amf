@@ -98,6 +98,12 @@
 - UL/DL NAS Transport for N1 SM messages
 - PDU session context management
 - QoS handling (basic)
+- QoS Flow management (detailed)
+  - QoS flow creation, modification, and deletion
+  - QoS flow description parsing and encoding
+  - QoS rule parsing and encoding
+  - Network-initiated QoS flow modification
+  - UE-initiated QoS flow modification requests
 - Session AMBR allocation
 - 5GSM Status
 - Always-on PDU session handling
@@ -201,9 +207,6 @@
 #### Connection Management
 - Service Request with emergency fallback
 
-
-### NAS SM Procedures
-- QoS Flow management (detailed)
 
 ### SBI Services - Missing/Incomplete
 

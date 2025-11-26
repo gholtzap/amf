@@ -344,6 +344,51 @@ func (ue *UEContext) DeletePduSession(pduSessionId int32) bool {
 	return true
 }
 
+func (session *PduSessionContext) AddQosFlow(qfi int, fiveQi int) *QosFlow {
+	if session.QosFlows == nil {
+		session.QosFlows = make(map[int]*QosFlow)
+	}
+
+	flow := &QosFlow{
+		QosFlowId: qfi,
+		FiveQi:    fiveQi,
+	}
+
+	session.QosFlows[qfi] = flow
+	return flow
+}
+
+func (session *PduSessionContext) GetQosFlow(qfi int) (*QosFlow, bool) {
+	flow, ok := session.QosFlows[qfi]
+	return flow, ok
+}
+
+func (session *PduSessionContext) DeleteQosFlow(qfi int) bool {
+	if _, ok := session.QosFlows[qfi]; !ok {
+		return false
+	}
+
+	delete(session.QosFlows, qfi)
+	return true
+}
+
+func (session *PduSessionContext) ModifyQosFlow(qfi int, fiveQi int, params *QosParameters) bool {
+	flow, ok := session.QosFlows[qfi]
+	if !ok {
+		return false
+	}
+
+	if fiveQi > 0 {
+		flow.FiveQi = fiveQi
+	}
+
+	if params != nil {
+		flow.QosParameters = params
+	}
+
+	return true
+}
+
 func (ue *UEContext) StopTimer(timer **time.Timer) {
 	ue.mu.Lock()
 	defer ue.mu.Unlock()
