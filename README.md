@@ -167,6 +167,7 @@
 - N1N2 subscription persistence and restore
 - AMF status subscription persistence and restore
 - Non-UE N2 subscription persistence and restore
+- Database backup/restore procedures
 - Configuration management (JSON-based)
 - Logging infrastructure
 - Health check endpoint
@@ -241,5 +242,4 @@
 - Inter-system key derivation
 
 ### Database/Persistence
-- Backup/restore procedures
 - Multi-instance synchronization

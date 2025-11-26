@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gavin/amf/internal/consumer"
-	"github.com/gavin/amf/internal/database"
 	"github.com/gavin/amf/internal/logger"
 )
 
@@ -66,6 +65,8 @@ type AMFContext struct {
 
 type DatabaseClient interface {
 	Disconnect() error
+	BackupToDirectory(dirPath string) error
+	RestoreFromDirectory(dirPath string) error
 }
 
 type UERepository interface {
@@ -583,17 +584,32 @@ func (c *AMFContext) RestoreFromDatabase() error {
 			logger.CtxLog.Warnf("Failed to restore N1N2 subscriptions: %v", err)
 		} else {
 			for _, subscriptionData := range n1n2Subscriptions {
-				if doc, ok := subscriptionData.(*database.N1N2SubscriptionDocument); ok {
-					subscription := &N1N2Subscription{
-						SubscriptionId:      doc.SubscriptionId,
-						UeContextId:         doc.UeContextId,
-						N1MessageClass:      doc.N1MessageClass,
-						N1NotifyCallbackUri: doc.N1NotifyCallbackUri,
-						N2InformationClass:  doc.N2InformationClass,
-						N2NotifyCallbackUri: doc.N2NotifyCallbackUri,
-						NfId:                doc.NfId,
+				if doc, ok := subscriptionData.(map[string]interface{}); ok {
+					subscription := &N1N2Subscription{}
+					if subscriptionId, ok := doc["subscription_id"].(string); ok {
+						subscription.SubscriptionId = subscriptionId
 					}
-					c.N1N2Subscriptions.Store(doc.SubscriptionId, subscription)
+					if ueContextId, ok := doc["ue_context_id"].(string); ok {
+						subscription.UeContextId = ueContextId
+					}
+					if n1MessageClass, ok := doc["n1_message_class"].(string); ok {
+						subscription.N1MessageClass = n1MessageClass
+					}
+					if n1NotifyCallbackUri, ok := doc["n1_notify_callback_uri"].(string); ok {
+						subscription.N1NotifyCallbackUri = n1NotifyCallbackUri
+					}
+					if n2InformationClass, ok := doc["n2_information_class"].(string); ok {
+						subscription.N2InformationClass = n2InformationClass
+					}
+					if n2NotifyCallbackUri, ok := doc["n2_notify_callback_uri"].(string); ok {
+						subscription.N2NotifyCallbackUri = n2NotifyCallbackUri
+					}
+					if nfId, ok := doc["nf_id"].(string); ok {
+						subscription.NfId = nfId
+					}
+					if subscription.SubscriptionId != "" {
+						c.N1N2Subscriptions.Store(subscription.SubscriptionId, subscription)
+					}
 				}
 			}
 			logger.CtxLog.Infof("Restored %d N1N2 subscriptions from database", len(n1n2Subscriptions))
@@ -681,4 +697,24 @@ func (c *AMFContext) Shutdown() error {
 
 	logger.CtxLog.Info("AMF Context shutdown complete")
 	return nil
+}
+
+func (c *AMFContext) BackupToDirectory(dirPath string) error {
+	if c.DbClient == nil {
+		return fmt.Errorf("database is not configured")
+	}
+
+	return c.DbClient.BackupToDirectory(dirPath)
+}
+
+func (c *AMFContext) RestoreFromBackup(dirPath string) error {
+	if c.DbClient == nil {
+		return fmt.Errorf("database is not configured")
+	}
+
+	if err := c.DbClient.RestoreFromDirectory(dirPath); err != nil {
+		return err
+	}
+
+	return c.RestoreFromDatabase()
 }

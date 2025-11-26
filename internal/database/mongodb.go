@@ -61,3 +61,13 @@ func (m *MongoDBClient) Disconnect() error {
 func (m *MongoDBClient) Context() context.Context {
 	return m.ctx
 }
+
+func (m *MongoDBClient) BackupToDirectory(dirPath string) error {
+	backupManager := NewBackupManager(m)
+	return backupManager.BackupToDirectory(dirPath)
+}
+
+func (m *MongoDBClient) RestoreFromDirectory(dirPath string) error {
+	backupManager := NewBackupManager(m)
+	return backupManager.RestoreFromDirectory(dirPath)
+}

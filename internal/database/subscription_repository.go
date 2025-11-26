@@ -120,12 +120,12 @@ func (r *SubscriptionRepository) FindAllN1N2Subscriptions() ([]interface{}, erro
 
 	var subscriptions []interface{}
 	for cursor.Next(r.ctx) {
-		var doc N1N2SubscriptionDocument
+		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			logger.DbLog.Warnf("Failed to decode N1N2 subscription: %v", err)
 			continue
 		}
-		subscriptions = append(subscriptions, &doc)
+		subscriptions = append(subscriptions, doc)
 	}
 
 	logger.DbLog.Infof("Loaded %d N1N2 subscriptions from MongoDB", len(subscriptions))

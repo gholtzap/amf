@@ -95,6 +95,9 @@ func (s *Server) registerRoutes() {
 
 	s.router.HandleFunc("/health", s.handleHealthCheck)
 
+	s.router.HandleFunc("/admin/backup", s.handleBackup)
+	s.router.HandleFunc("/admin/restore", s.handleRestore)
+
 	logger.SbiLog.Info("SBI routes registered")
 }
 
