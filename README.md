@@ -138,6 +138,7 @@
 - Provide Location Info2
 - Provide Positioning Info
 - Cancel Positioning Info
+- Periodic location reporting
 
 #### Namf_MT
 - Provide Domain Selection Info
@@ -208,7 +209,6 @@
 
 #### Namf_Location
 - Event-driven location reporting
-- Periodic location reporting
 
 #### Namf_MT
 - SMS delivery over NAS

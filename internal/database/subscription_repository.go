@@ -16,6 +16,7 @@ type SubscriptionRepository struct {
 	eventCollection        *mongo.Collection
 	amfStatusCollection    *mongo.Collection
 	nonUeN2Collection      *mongo.Collection
+	locationCollection     *mongo.Collection
 	ctx                    context.Context
 }
 
@@ -41,6 +42,7 @@ func NewSubscriptionRepository(client *MongoDBClient) *SubscriptionRepository {
 	eventCollection := client.GetCollection("event_subscriptions")
 	amfStatusCollection := client.GetCollection("amf_status_subscriptions")
 	nonUeN2Collection := client.GetCollection("non_ue_n2_subscriptions")
+	locationCollection := client.GetCollection("location_subscriptions")
 
 	ctx := client.Context()
 
@@ -59,6 +61,7 @@ func NewSubscriptionRepository(client *MongoDBClient) *SubscriptionRepository {
 	createIndex(eventCollection)
 	createIndex(amfStatusCollection)
 	createIndex(nonUeN2Collection)
+	createIndex(locationCollection)
 
 	logger.InitLog.Info("Subscription Repository initialized")
 
@@ -67,6 +70,7 @@ func NewSubscriptionRepository(client *MongoDBClient) *SubscriptionRepository {
 		eventCollection:     eventCollection,
 		amfStatusCollection: amfStatusCollection,
 		nonUeN2Collection:   nonUeN2Collection,
+		locationCollection:  locationCollection,
 		ctx:                 ctx,
 	}
 }
@@ -297,5 +301,62 @@ func (r *SubscriptionRepository) DeleteNonUeN2Subscription(subscriptionId string
 	}
 
 	logger.DbLog.Debugf("Non-UE N2 subscription deleted from MongoDB: %s", subscriptionId)
+	return nil
+}
+
+func (r *SubscriptionRepository) SaveLocationSubscription(subscriptionId string, data map[string]interface{}) error {
+	doc := GenericSubscriptionDocument{
+		SubscriptionId: subscriptionId,
+		Data:           data,
+		UpdatedAt:      time.Now(),
+	}
+
+	opts := options.Update().SetUpsert(true)
+	filter := bson.M{"subscription_id": subscriptionId}
+	update := bson.M{"$set": doc}
+
+	_, err := r.locationCollection.UpdateOne(r.ctx, filter, update, opts)
+	if err != nil {
+		return fmt.Errorf("failed to save location subscription: %w", err)
+	}
+
+	logger.DbLog.Debugf("Location subscription saved to MongoDB: %s", subscriptionId)
+	return nil
+}
+
+func (r *SubscriptionRepository) FindAllLocationSubscriptions() ([]interface{}, error) {
+	cursor, err := r.locationCollection.Find(r.ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find location subscriptions: %w", err)
+	}
+	defer cursor.Close(r.ctx)
+
+	var results []interface{}
+	for cursor.Next(r.ctx) {
+		var doc GenericSubscriptionDocument
+		if err := cursor.Decode(&doc); err != nil {
+			logger.DbLog.Warnf("Failed to decode location subscription document: %v", err)
+			continue
+		}
+		results = append(results, doc.Data)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	logger.DbLog.Debugf("Found %d location subscriptions in MongoDB", len(results))
+	return results, nil
+}
+
+func (r *SubscriptionRepository) DeleteLocationSubscription(subscriptionId string) error {
+	filter := bson.M{"subscription_id": subscriptionId}
+
+	_, err := r.locationCollection.DeleteOne(r.ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to delete location subscription: %w", err)
+	}
+
+	logger.DbLog.Debugf("Location subscription deleted from MongoDB: %s", subscriptionId)
 	return nil
 }

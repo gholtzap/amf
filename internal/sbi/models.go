@@ -967,23 +967,29 @@ type N2InformationNotification struct {
 }
 
 type RequestPosInfo struct {
-	LcsClientType           string   `json:"lcsClientType,omitempty"`
-	LcsLocation             string   `json:"lcsLocation,omitempty"`
-	Supi                    string   `json:"supi,omitempty"`
-	Gpsi                    string   `json:"gpsi,omitempty"`
-	Priority                string   `json:"priority,omitempty"`
-	LcsServiceType          string   `json:"lcsServiceType,omitempty"`
-	VelocityRequested       string   `json:"velocityRequested,omitempty"`
-	LcsSupportedGADShapes   string   `json:"lcsSupportedGADShapes,omitempty"`
-	LocationNotificationUri string   `json:"locationNotificationUri,omitempty"`
-	SupportedFeatures       string   `json:"supportedFeatures,omitempty"`
-	OldGuami                *Guami   `json:"oldGuami,omitempty"`
-	Pei                     string   `json:"pei,omitempty"`
-	HgmlcCallBackURI        string   `json:"hgmlcCallBackURI,omitempty"`
-	LdrType                 string   `json:"ldrType,omitempty"`
-	AfID                    string   `json:"afID,omitempty"`
-	ScheduledLocTime        string   `json:"scheduledLocTime,omitempty"`
-	ReliableLocReq          bool     `json:"reliableLocReq,omitempty"`
+	LcsClientType           string             `json:"lcsClientType,omitempty"`
+	LcsLocation             string             `json:"lcsLocation,omitempty"`
+	Supi                    string             `json:"supi,omitempty"`
+	Gpsi                    string             `json:"gpsi,omitempty"`
+	Priority                string             `json:"priority,omitempty"`
+	LcsServiceType          string             `json:"lcsServiceType,omitempty"`
+	VelocityRequested       string             `json:"velocityRequested,omitempty"`
+	LcsSupportedGADShapes   string             `json:"lcsSupportedGADShapes,omitempty"`
+	LocationNotificationUri string             `json:"locationNotificationUri,omitempty"`
+	SupportedFeatures       string             `json:"supportedFeatures,omitempty"`
+	OldGuami                *Guami             `json:"oldGuami,omitempty"`
+	Pei                     string             `json:"pei,omitempty"`
+	HgmlcCallBackURI        string             `json:"hgmlcCallBackURI,omitempty"`
+	LdrType                 string             `json:"ldrType,omitempty"`
+	AfID                    string             `json:"afID,omitempty"`
+	ScheduledLocTime        string             `json:"scheduledLocTime,omitempty"`
+	ReliableLocReq          bool               `json:"reliableLocReq,omitempty"`
+	PeriodicEventInfo       *PeriodicEventInfo `json:"periodicEventInfo,omitempty"`
+}
+
+type PeriodicEventInfo struct {
+	ReportingInterval      int32 `json:"reportingInterval"`
+	MaximumNumberOfReports int32 `json:"maximumNumberOfReports,omitempty"`
 }
 
 type CancelPosInfo struct {
@@ -1010,6 +1016,7 @@ type ProvidePosInfoExt struct {
 	UtranAccessInd         bool            `json:"utranAccessInd,omitempty"`
 	AchievedQos            string          `json:"achievedQos,omitempty"`
 	SupportedFeatures      string          `json:"supportedFeatures,omitempty"`
+	LdrReference           string          `json:"ldrReference,omitempty"`
 }
 
 type VelocityEstimate struct {
@@ -1019,6 +1026,17 @@ type VelocityEstimate struct {
 	VDirection     string `json:"vDirection,omitempty"`
 	HUncertainty   int32  `json:"hUncertainty,omitempty"`
 	VUncertainty   int32  `json:"vUncertainty,omitempty"`
+}
+
+type NotifiedPosInfo struct {
+	LocationEstimate       *GeographicArea `json:"locationEstimate,omitempty"`
+	AccuracyFulfilmentInd  string          `json:"accuracyFulfilmentInd,omitempty"`
+	AgeOfLocationEstimate  int32           `json:"ageOfLocationEstimate,omitempty"`
+	VelocityEstimate       *VelocityEstimate `json:"velocityEstimate,omitempty"`
+	Ncgi                   *Ncgi           `json:"ncgi,omitempty"`
+	Ecgi                   *Ecgi           `json:"ecgi,omitempty"`
+	AchievedQos            string          `json:"achievedQos,omitempty"`
+	LdrReference           string          `json:"ldrReference,omitempty"`
 }
 
 type CivicAddress struct {

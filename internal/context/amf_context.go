@@ -32,6 +32,8 @@ type AMFContext struct {
 
 	NonUeN2InfoSubscriptions sync.Map
 
+	LocationSubscriptions sync.Map
+
 	NfId string
 
 	NrfClient  *consumer.NRFClient
@@ -90,6 +92,9 @@ type SubscriptionRepository interface {
 	SaveNonUeN2Subscription(subscriptionId string, data map[string]interface{}) error
 	FindAllNonUeN2Subscriptions() ([]interface{}, error)
 	DeleteNonUeN2Subscription(subscriptionId string) error
+	SaveLocationSubscription(subscriptionId string, data map[string]interface{}) error
+	FindAllLocationSubscriptions() ([]interface{}, error)
+	DeleteLocationSubscription(subscriptionId string) error
 }
 
 type Guami struct {
@@ -377,6 +382,67 @@ func (c *AMFContext) GetAllNonUeN2InfoSubscriptions() map[string]interface{} {
 	return subscriptions
 }
 
+type LocationSubscription struct {
+	SubscriptionId          string
+	UeContextId             string
+	LocationNotificationUri string
+	ReportingInterval       int32
+	MaximumNumberOfReports  int32
+	ReportCount             int32
+	StopTimer               chan struct{}
+}
+
+func (c *AMFContext) StoreLocationSubscription(subscriptionId string, subscription *LocationSubscription) {
+	c.LocationSubscriptions.Store(subscriptionId, subscription)
+	logger.CtxLog.Infof("Location subscription stored: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		data := make(map[string]interface{})
+		data["subscriptionId"] = subscriptionId
+		data["ueContextId"] = subscription.UeContextId
+		data["locationNotificationUri"] = subscription.LocationNotificationUri
+		data["reportingInterval"] = subscription.ReportingInterval
+		data["maximumNumberOfReports"] = subscription.MaximumNumberOfReports
+		data["reportCount"] = subscription.ReportCount
+		if err := c.SubscriptionRepo.SaveLocationSubscription(subscriptionId, data); err != nil {
+			logger.CtxLog.Errorf("Failed to persist location subscription: %v", err)
+		}
+	}
+}
+
+func (c *AMFContext) GetLocationSubscription(subscriptionId string) (*LocationSubscription, bool) {
+	val, ok := c.LocationSubscriptions.Load(subscriptionId)
+	if !ok {
+		return nil, false
+	}
+	return val.(*LocationSubscription), true
+}
+
+func (c *AMFContext) DeleteLocationSubscription(subscriptionId string) {
+	if sub, ok := c.GetLocationSubscription(subscriptionId); ok {
+		if sub.StopTimer != nil {
+			close(sub.StopTimer)
+		}
+	}
+	c.LocationSubscriptions.Delete(subscriptionId)
+	logger.CtxLog.Infof("Location subscription deleted: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.DeleteLocationSubscription(subscriptionId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete location subscription from database: %v", err)
+		}
+	}
+}
+
+func (c *AMFContext) GetAllLocationSubscriptions() map[string]*LocationSubscription {
+	subscriptions := make(map[string]*LocationSubscription)
+	c.LocationSubscriptions.Range(func(key, value interface{}) bool {
+		subscriptions[key.(string)] = value.(*LocationSubscription)
+		return true
+	})
+	return subscriptions
+}
+
 type N1N2Subscription struct {
 	SubscriptionId      string
 	UeContextId         string
@@ -649,6 +715,46 @@ func (c *AMFContext) RestoreFromDatabase() error {
 				}
 			}
 			logger.CtxLog.Infof("Restored %d Non-UE N2 subscriptions from database", len(nonUeN2Subscriptions))
+		}
+
+		locationSubscriptions, err := c.SubscriptionRepo.FindAllLocationSubscriptions()
+		if err != nil {
+			logger.CtxLog.Warnf("Failed to restore location subscriptions: %v", err)
+		} else {
+			for _, subscriptionData := range locationSubscriptions {
+				if doc, ok := subscriptionData.(map[string]interface{}); ok {
+					subscription := &LocationSubscription{}
+					if subscriptionId, ok := doc["subscriptionId"].(string); ok {
+						subscription.SubscriptionId = subscriptionId
+					}
+					if ueContextId, ok := doc["ueContextId"].(string); ok {
+						subscription.UeContextId = ueContextId
+					}
+					if locationNotificationUri, ok := doc["locationNotificationUri"].(string); ok {
+						subscription.LocationNotificationUri = locationNotificationUri
+					}
+					if reportingInterval, ok := doc["reportingInterval"].(int32); ok {
+						subscription.ReportingInterval = reportingInterval
+					} else if reportingInterval, ok := doc["reportingInterval"].(float64); ok {
+						subscription.ReportingInterval = int32(reportingInterval)
+					}
+					if maximumNumberOfReports, ok := doc["maximumNumberOfReports"].(int32); ok {
+						subscription.MaximumNumberOfReports = maximumNumberOfReports
+					} else if maximumNumberOfReports, ok := doc["maximumNumberOfReports"].(float64); ok {
+						subscription.MaximumNumberOfReports = int32(maximumNumberOfReports)
+					}
+					if reportCount, ok := doc["reportCount"].(int32); ok {
+						subscription.ReportCount = reportCount
+					} else if reportCount, ok := doc["reportCount"].(float64); ok {
+						subscription.ReportCount = int32(reportCount)
+					}
+					subscription.StopTimer = make(chan struct{})
+					if subscription.SubscriptionId != "" {
+						c.LocationSubscriptions.Store(subscription.SubscriptionId, subscription)
+					}
+				}
+			}
+			logger.CtxLog.Infof("Restored %d location subscriptions from database", len(locationSubscriptions))
 		}
 	}
 
