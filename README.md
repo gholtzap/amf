@@ -126,6 +126,7 @@
   - Loss of connectivity events
   - Communication failure events
   - UE mobility events
+  - Location reporting (periodic and event-driven)
 
 #### Namf_Location
 - Provide Location Info
@@ -200,9 +201,6 @@
 - UE Context transfer result notification
 - Non-UE N2 Info Unsubscribe
 - N2 Info Transfer result notification
-
-#### Namf_EventExposure
-- Location reporting (periodic and event-driven)
 
 #### Namf_Location
 - Event-driven location reporting

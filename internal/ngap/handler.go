@@ -1599,6 +1599,30 @@ func (h *Handler) HandleLocationReport(ranContext *context.RANContext, pdu *NGAP
 		}
 
 		logger.NgapLog.Infof("Updated UE location: TAI=%+v, Cell ID=%s", ue.Tai, ue.CellId)
+
+		location := &sbi.UserLocation{
+			NrLocation: &sbi.NrLocation{
+				Tai: &sbi.Tai{
+					PlmnId: &sbi.PlmnId{
+						Mcc: ue.Tai.PlmnId.Mcc,
+						Mnc: ue.Tai.PlmnId.Mnc,
+					},
+					Tac: ue.Tai.Tac,
+				},
+				Ncgi: &sbi.Ncgi{
+					PlmnId: &sbi.PlmnId{
+						Mcc: ue.Tai.PlmnId.Mcc,
+						Mnc: ue.Tai.PlmnId.Mnc,
+					},
+					NrCellId: ue.CellId,
+				},
+			},
+		}
+
+		additionalData := map[string]interface{}{
+			"location": location,
+		}
+		sbi.NotifyEventForContext(h.amfContext, sbi.EventTypeLocationReport, ue.Supi, additionalData)
 	}
 
 	logger.NgapLog.Infof("Location Report received for AMF UE NGAP ID=%d, RAN UE NGAP ID=%d",

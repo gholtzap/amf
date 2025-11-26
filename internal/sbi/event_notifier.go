@@ -143,6 +143,9 @@ func NotifyEventForContext(amfContext interface{}, eventType string, supi string
 			if timezone, ok := additionalData["timezone"].(string); ok {
 				report.Timezone = timezone
 			}
+			if location, ok := additionalData["location"].(*UserLocation); ok {
+				report.Location = location
+			}
 		}
 
 		notification := &AmfEventNotification{
