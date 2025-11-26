@@ -68,6 +68,7 @@
 - Authentication Request/Response/Reject/Failure
 - Identity Request/Response
 - Tracking Area Update
+- 5GMM Status (NAS transport reject)
 
 #### 5G MM Timers
 - T3502 (Registration Reject timer)
@@ -186,7 +187,6 @@
 
 #### Connection Management
 - Service Request with emergency fallback
-- NAS transport reject
 
 
 ### NAS SM Procedures

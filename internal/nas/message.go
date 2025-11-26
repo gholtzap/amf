@@ -47,6 +47,7 @@ const (
 	MsgTypeDLNASTransport             = 0x68
 	MsgTypeGenericUEConfigurationUpdateCommand  = 0xd0
 	MsgTypeGenericUEConfigurationUpdateComplete = 0xd1
+	MsgTypeFiveGMMStatus = 0x64
 )
 
 const (
@@ -304,6 +305,10 @@ type ServiceRejectMsg struct {
 	T3346Value           []byte
 	EAPMessage           []byte
 	T3448Value           []byte
+}
+
+type FiveGMMStatusMsg struct {
+	Cause5GMM uint8
 }
 
 type ControlPlaneServiceRequest struct {
@@ -1445,6 +1450,12 @@ func EncodeServiceReject(msg *ServiceRejectMsg) []byte {
 		payload = append(payload, msg.T3448Value...)
 	}
 
+	return payload
+}
+
+func EncodeFiveGMMStatus(msg *FiveGMMStatusMsg) []byte {
+	payload := make([]byte, 0)
+	payload = append(payload, msg.Cause5GMM)
 	return payload
 }
 

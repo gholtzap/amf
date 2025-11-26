@@ -922,6 +922,24 @@ func (h *Handler) SendServiceReject(ue *context.UEContext, cause uint8) error {
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
 }
 
+func (h *Handler) SendFiveGMMStatus(ue *context.UEContext, cause uint8) error {
+	logger.NasLog.Infof("Sending 5GMM Status to UE SUPI: %s with cause: 0x%02x", ue.Supi, cause)
+
+	msg := &FiveGMMStatusMsg{
+		Cause5GMM: cause,
+	}
+
+	statusPayload := EncodeFiveGMMStatus(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeFiveGMMStatus, statusPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
 func (h *Handler) DeliverPendingMessages(ue *context.UEContext) error {
 	if len(ue.PendingMessages) == 0 {
 		return nil
@@ -1111,7 +1129,8 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 
 	ulMsg, err := DecodeULNASTransport(payload)
 	if err != nil {
-		return fmt.Errorf("failed to decode UL NAS transport: %v", err)
+		logger.NasLog.Errorf("Failed to decode UL NAS transport: %v", err)
+		return h.SendFiveGMMStatus(ue, CauseSemanticallyIncorrectMessage)
 	}
 
 	logger.NasLog.Infof("Payload Container Type: 0x%02x, PDU Session ID: %d",
@@ -1119,11 +1138,12 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 
 	if ulMsg.PayloadContainerType != PayloadContainerTypeN1SMInfo {
 		logger.NasLog.Warnf("Unsupported payload container type: 0x%02x", ulMsg.PayloadContainerType)
-		return nil
+		return h.SendFiveGMMStatus(ue, CauseMessageTypeNotCompatible)
 	}
 
 	if len(ulMsg.PayloadContainer) < 3 {
-		return fmt.Errorf("payload container too short")
+		logger.NasLog.Errorf("Payload container too short: %d bytes", len(ulMsg.PayloadContainer))
+		return h.SendFiveGMMStatus(ue, CauseSemanticallyIncorrectMessage)
 	}
 
 	smPdu := ulMsg.PayloadContainer
@@ -1134,7 +1154,7 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 
 	if smPD != ProtocolDiscriminator5GSM {
 		logger.NasLog.Warnf("Invalid SM protocol discriminator: 0x%x", smPD)
-		return nil
+		return h.SendFiveGMMStatus(ue, CauseProtocolError)
 	}
 
 	switch smMsgType {
