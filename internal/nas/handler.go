@@ -189,6 +189,11 @@ func (h *Handler) HandleRegistrationRequest(ue *context.UEContext, payload []byt
 				return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
 			}
 
+			if ue.IsServiceAreaRestricted(ue.Tai) {
+				logger.NasLog.Warnf("UE in restricted service area: TAC=%s - rejecting mobility update", ue.Tai.Tac)
+				return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
+			}
+
 			if !ue.IsTaiInList(ue.Tai) {
 				logger.NasLog.Infof("UE moved to new TAI outside allowed list - will provide updated TAI list")
 			} else {
@@ -604,6 +609,32 @@ func (h *Handler) HandleSecurityModeComplete(ue *context.UEContext, payload []by
 			logger.NasLog.Infof("Retrieved subscription data with %d default S-NSSAIs",
 				len(amData.Nssai.DefaultSingleNssais))
 		}
+
+		if amData.ServiceAreaRestriction != nil {
+			ue.ServiceAreaRestriction = &context.ServiceAreaRestriction{
+				RestrictionType: amData.ServiceAreaRestriction.RestrictionType,
+				MaxNumOfTAs:     amData.ServiceAreaRestriction.MaxNumOfTAs,
+			}
+			for _, area := range amData.ServiceAreaRestriction.Areas {
+				ue.ServiceAreaRestriction.Areas = append(ue.ServiceAreaRestriction.Areas,
+					context.AreaRestriction{Tacs: area.Tacs})
+			}
+			logger.NasLog.Infof("Service area restriction applied: %s", ue.ServiceAreaRestriction.RestrictionType)
+		}
+
+		if len(amData.ForbiddenAreas) > 0 {
+			ue.ForbiddenTaiList = make([]context.Tai, 0)
+			for _, area := range amData.ForbiddenAreas {
+				for _, tac := range area.Tacs {
+					forbiddenTai := context.Tai{
+						PlmnId: h.amfContext.ServedGuami[0].PlmnId,
+						Tac:    tac,
+					}
+					ue.ForbiddenTaiList = append(ue.ForbiddenTaiList, forbiddenTai)
+				}
+			}
+			logger.NasLog.Infof("Forbidden areas configured: %d TACs", len(ue.ForbiddenTaiList))
+		}
 	}
 
 	if err := udmClient.RegisterAMF(ue.Supi, h.amfContext.Name,
@@ -646,6 +677,11 @@ func (h *Handler) SendRegistrationAccept(ue *context.UEContext) error {
 
 	if ue.IsTaiForbidden(ue.Tai) {
 		logger.NasLog.Warnf("UE in forbidden TAI: %+v - rejecting registration", ue.Tai)
+		return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
+	}
+
+	if ue.IsServiceAreaRestricted(ue.Tai) {
+		logger.NasLog.Warnf("UE in restricted service area: TAC=%s - rejecting registration", ue.Tai.Tac)
 		return h.SendRegistrationReject(ue, CauseTrackingAreaNotAllowed)
 	}
 

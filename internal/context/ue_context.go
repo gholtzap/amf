@@ -39,6 +39,7 @@ type UEContext struct {
 	LastTai         *Tai   // Previous Tracking Area Identity (for mobility detection)
 	TaiList         []Tai  // List of allowed Tracking Area Identities
 	ForbiddenTaiList []Tai // List of forbidden Tracking Area Identities
+	ServiceAreaRestriction *ServiceAreaRestriction
 	CellId          string
 	CurrentRNA      uint16   // Current RAN Notification Area
 	RNAList         []uint16 // List of configured RAN Notification Area IDs
@@ -181,6 +182,16 @@ const (
 type Tai struct {
 	PlmnId PlmnId
 	Tac    string // Tracking Area Code
+}
+
+type ServiceAreaRestriction struct {
+	RestrictionType string
+	Areas           []AreaRestriction
+	MaxNumOfTAs     int
+}
+
+type AreaRestriction struct {
+	Tacs []string
 }
 
 // SecurityContext represents UE security context (TS 33.501)
@@ -479,4 +490,34 @@ func (ue *UEContext) HasTaiChanged(newTai Tai) bool {
 	return !(ue.Tai.PlmnId.Mcc == newTai.PlmnId.Mcc &&
 		ue.Tai.PlmnId.Mnc == newTai.PlmnId.Mnc &&
 		ue.Tai.Tac == newTai.Tac)
+}
+
+func (ue *UEContext) IsServiceAreaRestricted(tai Tai) bool {
+	ue.mu.RLock()
+	defer ue.mu.RUnlock()
+
+	if ue.ServiceAreaRestriction == nil {
+		return false
+	}
+
+	tacInRestrictedAreas := false
+	for _, area := range ue.ServiceAreaRestriction.Areas {
+		for _, tac := range area.Tacs {
+			if tac == tai.Tac {
+				tacInRestrictedAreas = true
+				break
+			}
+		}
+		if tacInRestrictedAreas {
+			break
+		}
+	}
+
+	if ue.ServiceAreaRestriction.RestrictionType == "ALLOWED_AREAS" {
+		return !tacInRestrictedAreas
+	} else if ue.ServiceAreaRestriction.RestrictionType == "NOT_ALLOWED_AREAS" {
+		return tacInRestrictedAreas
+	}
+
+	return false
 }

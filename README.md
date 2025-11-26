@@ -180,6 +180,7 @@
 - eDRX (Extended Discontinuous Reception) power saving
 - PSM (Power Saving Mode) with T3324 and T3412 extended timers
 - Forbidden area management
+- Restricted service area
 
 ## NOT IMPLEMENTED FEATURES
 
@@ -231,7 +232,6 @@
 - Protection of initial NAS message
 - Service gap control
 - Extended DRX
-- Restricted service area
 
 ### Security Features (Not Implemented)
 - Security context synchronization
