@@ -102,6 +102,7 @@
 - 5GSM Status
 - Always-on PDU session handling
 - SSC mode selection
+- MPTCP support
 
 ### SBI (Service-Based Interfaces)
 
@@ -131,7 +132,7 @@
   - Location reporting (periodic and event-driven)
 
 #### Namf_Location
-- Provide Location Info
+- Provide Location Info2
 - Provide Positioning Info
 - Cancel Positioning Info
 
@@ -193,7 +194,6 @@
 ### NAS SM Procedures
 - QoS Flow management (detailed)
 - Reflective QoS
-- MPTCP support
 
 ### SBI Services - Missing/Incomplete
 

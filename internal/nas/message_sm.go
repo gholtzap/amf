@@ -34,6 +34,7 @@ type PDUSessionEstablishmentRequestMsg struct {
 	AlwaysOnPDUSessionRequested         uint8
 	SMPDUDNRequestContainer             []byte
 	ExtendedProtocolConfigurationOptions []byte
+	MPTCP                               uint8
 }
 
 type PDUSessionEstablishmentAcceptMsg struct {
@@ -50,6 +51,7 @@ type PDUSessionEstablishmentAcceptMsg struct {
 	QoSFlowDescriptions                 []byte
 	ExtendedProtocolConfigurationOptions []byte
 	DNN                                 []byte
+	MPTCP                               uint8
 }
 
 type PDUSessionEstablishmentRejectMsg struct {
@@ -277,6 +279,13 @@ func DecodePDUSessionEstablishmentRequest(payload []byte) (*PDUSessionEstablishm
 			msg.AlwaysOnPDUSessionRequested = payload[offset] & 0x01
 			offset++
 
+		case 0x06:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.MPTCP = payload[offset] & 0x0f
+			offset++
+
 		case 0x28:
 			if offset >= len(payload) {
 				return msg, nil
@@ -386,6 +395,12 @@ func EncodePDUSessionEstablishmentAccept(msg *PDUSessionEstablishmentAcceptMsg) 
 		payload = append(payload, IEIDNN)
 		payload = append(payload, uint8(len(msg.DNN)))
 		payload = append(payload, msg.DNN...)
+	}
+
+	if msg.MPTCP > 0 {
+		payload = append(payload, 0x69)
+		payload = append(payload, 0x03)
+		payload = append(payload, msg.MPTCP)
 	}
 
 	return payload

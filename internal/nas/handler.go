@@ -1188,7 +1188,8 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 	}
 
 	alwaysOnRequested := smReq.AlwaysOnPDUSessionRequested == 1
-	logger.NasLog.Infof("PDU Session Type: %d, SSC Mode: %d, AlwaysOn Requested: %v", smReq.PDUSessionType, smReq.SSCMode, alwaysOnRequested)
+	mptcpRequested := smReq.MPTCP > 0
+	logger.NasLog.Infof("PDU Session Type: %d, SSC Mode: %d, AlwaysOn Requested: %v, MPTCP Requested: %v", smReq.PDUSessionType, smReq.SSCMode, alwaysOnRequested, mptcpRequested)
 
 	dnnStr := "internet"
 	if len(dnn) > 0 {
@@ -1245,6 +1246,8 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 		AlwaysOn:      alwaysOnRequested,
 		SscMode:       selectedSscMode,
 		PduSessionType: smReq.PDUSessionType,
+		MptcpRequested: mptcpRequested,
+		MptcpIndication: smReq.MPTCP,
 	}
 
 	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
@@ -1264,6 +1267,11 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 
 	if alwaysOnRequested {
 		acceptMsg.AlwaysOnPDUSessionIndication = 1
+	}
+
+	if mptcpRequested {
+		acceptMsg.MPTCP = smReq.MPTCP
+		logger.NasLog.Infof("MPTCP indication included in PDU Session Accept: 0x%02x", acceptMsg.MPTCP)
 	}
 
 	if len(dnn) > 0 {

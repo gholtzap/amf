@@ -224,6 +224,8 @@ type PduSessionContext struct {
 	EapRand        []byte
 	EapAutn        []byte
 	RequestMsg     []byte
+	MptcpRequested bool
+	MptcpIndication uint8
 }
 
 type PduSessionState string
