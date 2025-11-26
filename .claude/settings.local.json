@@ -17,7 +17,8 @@
       "Bash(find:*)",
       "Bash(powershell -Command \"(Get-Content ''c:\\Users\\Gavin\\dev\\telco\\amf\\internal\\nas\\handler.go'' | Measure-Object -Line).Lines\")",
       "Bash(powershell -Command \"(Get-Content ''c:\\Users\\Gavin\\dev\\telco\\amf\\internal\\ngap\\handler.go'' | Measure-Object -Line).Lines\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(ls -la \"c:\\Users\\Gavin\\dev\\telco\\amf\\internal\\sbi\"\" | grep \".go \")"
     ],
     "deny": [],
     "ask": []

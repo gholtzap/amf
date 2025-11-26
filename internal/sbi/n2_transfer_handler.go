@@ -1,7 +1,10 @@
 package sbi
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gavin/amf/internal/logger"
 )
@@ -67,8 +70,54 @@ func (s *Server) NonUeN2MessageTransfer(reqData *N2InformationTransferReqData, b
 
 	logger.SbiLog.Info("Non-UE N2 Message Transfer initiated successfully")
 
-	return &N2InformationTransferRspData{
+	response := &N2InformationTransferRspData{
 		Result:            string(N2InformationTransferResultINITIATED),
 		SupportedFeatures: reqData.SupportedFeatures,
-	}, nil
+	}
+
+	if reqData.N2NotifyCallbackUri != "" {
+		logger.SbiLog.Infof("N2 transfer result callback will be sent to: %s", reqData.N2NotifyCallbackUri)
+		go s.sendN2TransferResultNotification(reqData.N2NotifyCallbackUri, response)
+	}
+
+	return response, nil
+}
+
+func (s *Server) sendN2TransferResultNotification(callbackUri string, result *N2InformationTransferRspData) {
+	notification := &N2InfoNotification{
+		Result:             result.Result,
+		PwsRspData:         result.PwsRspData,
+		TssRspPerNgranList: result.TssRspPerNgranList,
+	}
+
+	jsonData, err := json.Marshal(notification)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to marshal N2 transfer notification: %v", err)
+		return
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest("POST", callbackUri, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to create N2 transfer notification request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to send N2 transfer notification to %s: %v", callbackUri, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logger.SbiLog.Infof("N2 transfer notification sent successfully to %s (status: %d)", callbackUri, resp.StatusCode)
+	} else {
+		logger.SbiLog.Warnf("N2 transfer notification received non-success response from %s: %d", callbackUri, resp.StatusCode)
+	}
 }

@@ -611,11 +611,12 @@ const (
 )
 
 type N2InformationTransferReqData struct {
-	TaiList           []Tai              `json:"taiList,omitempty"`
-	RatSelector       string             `json:"ratSelector,omitempty"`
-	GlobalRanNodeList []GlobalRanNodeId  `json:"globalRanNodeList,omitempty"`
-	N2Information     *N2InfoContainer   `json:"n2Information,omitempty"`
-	SupportedFeatures string             `json:"supportedFeatures,omitempty"`
+	TaiList                 []Tai              `json:"taiList,omitempty"`
+	RatSelector             string             `json:"ratSelector,omitempty"`
+	GlobalRanNodeList       []GlobalRanNodeId  `json:"globalRanNodeList,omitempty"`
+	N2Information           *N2InfoContainer   `json:"n2Information,omitempty"`
+	SupportedFeatures       string             `json:"supportedFeatures,omitempty"`
+	N2NotifyCallbackUri     string             `json:"n2NotifyCallbackUri,omitempty"`
 }
 
 type N2InformationTransferRspData struct {
@@ -628,6 +629,13 @@ type N2InformationTransferRspData struct {
 type N2InformationTransferError struct {
 	Error        *ProblemDetails `json:"error"`
 	PwsErrorInfo *PWSErrorData   `json:"pwsErrorInfo,omitempty"`
+}
+
+type N2InfoNotification struct {
+	Result            string              `json:"result"`
+	PwsRspData        *PWSResponseData    `json:"pwsRspData,omitempty"`
+	TssRspPerNgranList []TssRspPerNgran   `json:"tssRspPerNgranList,omitempty"`
+	ErrorInfo         *ProblemDetails     `json:"errorInfo,omitempty"`
 }
 
 type PWSResponseData struct {
