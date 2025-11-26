@@ -821,11 +821,12 @@ type UeContextSearchResult struct {
 }
 
 type UeContextTransferReqData struct {
-	Reason            string               `json:"reason"`
-	AccessType        string               `json:"accessType"`
-	PlmnId            *PlmnId              `json:"plmnId,omitempty"`
-	RegRequest        *N1MessageContainer  `json:"regRequest,omitempty"`
-	SupportedFeatures string               `json:"supportedFeatures,omitempty"`
+	Reason                string               `json:"reason"`
+	AccessType            string               `json:"accessType"`
+	PlmnId                *PlmnId              `json:"plmnId,omitempty"`
+	RegRequest            *N1MessageContainer  `json:"regRequest,omitempty"`
+	SupportedFeatures     string               `json:"supportedFeatures,omitempty"`
+	N2NotifyCallbackUri   string               `json:"n2NotifyCallbackUri,omitempty"`
 }
 
 type UeContextTransferRspData struct {
@@ -843,6 +844,14 @@ const (
 	TransferReasonMobiReg            TransferReason = "MOBI_REG"
 	TransferReasonMobiRegUeValidated TransferReason = "MOBI_REG_UE_VALIDATED"
 )
+
+type UeContextTransferNotification struct {
+	UeContext             *UeContext     `json:"ueContext,omitempty"`
+	UeRadioCapability     *N2InfoContent `json:"ueRadioCapability,omitempty"`
+	TargetToSourceData    *N2InfoContent `json:"targetToSourceData,omitempty"`
+	SupportedFeatures     string         `json:"supportedFeatures,omitempty"`
+	TransferCompleteInd   bool           `json:"transferCompleteInd,omitempty"`
+}
 
 type UeRegStatusUpdateReqData struct {
 	TransferStatus       string          `json:"transferStatus"`

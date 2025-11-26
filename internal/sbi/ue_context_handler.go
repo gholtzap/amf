@@ -1,6 +1,7 @@
 package sbi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gavin/amf/internal/context"
 	"github.com/gavin/amf/internal/logger"
@@ -538,6 +540,11 @@ func (s *Server) UEContextTransfer(ueContextId string, reqData *UeContextTransfe
 		SupportedFeatures: reqData.SupportedFeatures,
 	}
 
+	if reqData.N2NotifyCallbackUri != "" {
+		logger.SbiLog.Infof("UE context transfer result callback will be sent to: %s", reqData.N2NotifyCallbackUri)
+		go s.sendUeContextTransferResultNotification(reqData.N2NotifyCallbackUri, response)
+	}
+
 	logger.SbiLog.Infof("UE Context Transfer successful for UE: %s", ue.Supi)
 	return response, nil
 }
@@ -739,4 +746,44 @@ func (s *Server) CancelRelocateUEContext(ueContextId string, cancelData *UeConte
 
 	logger.SbiLog.Infof("Relocation cancelled for UE: %s", ue.Supi)
 	return nil
+}
+
+func (s *Server) sendUeContextTransferResultNotification(callbackUri string, response *UeContextTransferRspData) {
+	notification := &UeContextTransferNotification{
+		UeContext:           response.UeContext,
+		UeRadioCapability:   response.UeRadioCapability,
+		SupportedFeatures:   response.SupportedFeatures,
+		TransferCompleteInd: true,
+	}
+
+	jsonData, err := json.Marshal(notification)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to marshal UE context transfer notification: %v", err)
+		return
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest("POST", callbackUri, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to create UE context transfer notification request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.SbiLog.Errorf("Failed to send UE context transfer notification to %s: %v", callbackUri, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logger.SbiLog.Infof("UE context transfer notification sent successfully to %s (status: %d)", callbackUri, resp.StatusCode)
+	} else {
+		logger.SbiLog.Warnf("UE context transfer notification received non-success response from %s: %d", callbackUri, resp.StatusCode)
+	}
 }

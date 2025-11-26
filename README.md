@@ -121,6 +121,7 @@
 - AMF Status subscriptions
 - AMF Status Change Subscribe/Unsubscribe/Notify
 - N2 Info Transfer result notification
+- UE Context transfer result notification
 
 #### Namf_EventExposure
 - Event subscription Create/Delete/Modify
@@ -199,7 +200,6 @@
 ### SBI Services - Missing/Incomplete
 
 #### Namf_Communication
-- UE Context transfer result notification
 - Non-UE N2 Info Unsubscribe
 
 #### Namf_Location
