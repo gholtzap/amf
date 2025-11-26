@@ -247,3 +247,55 @@ func (r *SubscriptionRepository) DeleteAMFStatusSubscription(subscriptionId stri
 	logger.DbLog.Debugf("AMF status subscription deleted from MongoDB: %s", subscriptionId)
 	return nil
 }
+
+func (r *SubscriptionRepository) SaveNonUeN2Subscription(subscriptionId string, data map[string]interface{}) error {
+	doc := GenericSubscriptionDocument{
+		SubscriptionId: subscriptionId,
+		Data:           data,
+		UpdatedAt:      time.Now(),
+	}
+
+	filter := bson.M{"subscription_id": subscriptionId}
+	opts := options.Replace().SetUpsert(true)
+
+	_, err := r.nonUeN2Collection.ReplaceOne(r.ctx, filter, doc, opts)
+	if err != nil {
+		return fmt.Errorf("failed to save Non-UE N2 subscription: %w", err)
+	}
+
+	logger.DbLog.Debugf("Non-UE N2 subscription saved to MongoDB: %s", subscriptionId)
+	return nil
+}
+
+func (r *SubscriptionRepository) FindAllNonUeN2Subscriptions() ([]interface{}, error) {
+	cursor, err := r.nonUeN2Collection.Find(r.ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find Non-UE N2 subscriptions: %w", err)
+	}
+	defer cursor.Close(r.ctx)
+
+	var subscriptions []interface{}
+	for cursor.Next(r.ctx) {
+		var doc GenericSubscriptionDocument
+		if err := cursor.Decode(&doc); err != nil {
+			logger.DbLog.Warnf("Failed to decode Non-UE N2 subscription: %v", err)
+			continue
+		}
+		subscriptions = append(subscriptions, &doc)
+	}
+
+	logger.DbLog.Infof("Loaded %d Non-UE N2 subscriptions from MongoDB", len(subscriptions))
+	return subscriptions, nil
+}
+
+func (r *SubscriptionRepository) DeleteNonUeN2Subscription(subscriptionId string) error {
+	filter := bson.M{"subscription_id": subscriptionId}
+
+	_, err := r.nonUeN2Collection.DeleteOne(r.ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to delete Non-UE N2 subscription: %w", err)
+	}
+
+	logger.DbLog.Debugf("Non-UE N2 subscription deleted from MongoDB: %s", subscriptionId)
+	return nil
+}

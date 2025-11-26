@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gavin/amf/internal/consumer"
+	"github.com/gavin/amf/internal/database"
 	"github.com/gavin/amf/internal/logger"
 )
 
@@ -85,6 +86,9 @@ type SubscriptionRepository interface {
 	SaveAMFStatusSubscription(subscriptionId string, data map[string]interface{}) error
 	FindAllAMFStatusSubscriptions() ([]interface{}, error)
 	DeleteAMFStatusSubscription(subscriptionId string) error
+	SaveNonUeN2Subscription(subscriptionId string, data map[string]interface{}) error
+	FindAllNonUeN2Subscriptions() ([]interface{}, error)
+	DeleteNonUeN2Subscription(subscriptionId string) error
 }
 
 type Guami struct {
@@ -334,6 +338,44 @@ func (c *AMFContext) GetAllAMFStatusSubscriptions() map[string]interface{} {
 	return subscriptions
 }
 
+func (c *AMFContext) StoreNonUeN2InfoSubscription(subscriptionId string, subscription interface{}) {
+	c.NonUeN2InfoSubscriptions.Store(subscriptionId, subscription)
+	logger.CtxLog.Infof("Non-UE N2 Info subscription stored: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		data := make(map[string]interface{})
+		data["subscriptionId"] = subscriptionId
+		data["subscription"] = subscription
+		if err := c.SubscriptionRepo.SaveNonUeN2Subscription(subscriptionId, data); err != nil {
+			logger.CtxLog.Errorf("Failed to persist Non-UE N2 Info subscription: %v", err)
+		}
+	}
+}
+
+func (c *AMFContext) GetNonUeN2InfoSubscription(subscriptionId string) (interface{}, bool) {
+	return c.NonUeN2InfoSubscriptions.Load(subscriptionId)
+}
+
+func (c *AMFContext) DeleteNonUeN2InfoSubscription(subscriptionId string) {
+	c.NonUeN2InfoSubscriptions.Delete(subscriptionId)
+	logger.CtxLog.Infof("Non-UE N2 Info subscription deleted: %s", subscriptionId)
+
+	if c.persistenceEnabled && c.SubscriptionRepo != nil {
+		if err := c.SubscriptionRepo.DeleteNonUeN2Subscription(subscriptionId); err != nil {
+			logger.CtxLog.Errorf("Failed to delete Non-UE N2 Info subscription from database: %v", err)
+		}
+	}
+}
+
+func (c *AMFContext) GetAllNonUeN2InfoSubscriptions() map[string]interface{} {
+	subscriptions := make(map[string]interface{})
+	c.NonUeN2InfoSubscriptions.Range(func(key, value interface{}) bool {
+		subscriptions[key.(string)] = value
+		return true
+	})
+	return subscriptions
+}
+
 type N1N2Subscription struct {
 	SubscriptionId      string
 	UeContextId         string
@@ -534,6 +576,63 @@ func (c *AMFContext) RestoreFromDatabase() error {
 				}
 			}
 			logger.CtxLog.Infof("Restored %d event subscriptions from database", len(eventSubscriptions))
+		}
+
+		n1n2Subscriptions, err := c.SubscriptionRepo.FindAllN1N2Subscriptions()
+		if err != nil {
+			logger.CtxLog.Warnf("Failed to restore N1N2 subscriptions: %v", err)
+		} else {
+			for _, subscriptionData := range n1n2Subscriptions {
+				if doc, ok := subscriptionData.(*database.N1N2SubscriptionDocument); ok {
+					subscription := &N1N2Subscription{
+						SubscriptionId:      doc.SubscriptionId,
+						UeContextId:         doc.UeContextId,
+						N1MessageClass:      doc.N1MessageClass,
+						N1NotifyCallbackUri: doc.N1NotifyCallbackUri,
+						N2InformationClass:  doc.N2InformationClass,
+						N2NotifyCallbackUri: doc.N2NotifyCallbackUri,
+						NfId:                doc.NfId,
+					}
+					c.N1N2Subscriptions.Store(doc.SubscriptionId, subscription)
+				}
+			}
+			logger.CtxLog.Infof("Restored %d N1N2 subscriptions from database", len(n1n2Subscriptions))
+		}
+
+		amfStatusSubscriptions, err := c.SubscriptionRepo.FindAllAMFStatusSubscriptions()
+		if err != nil {
+			logger.CtxLog.Warnf("Failed to restore AMF status subscriptions: %v", err)
+		} else {
+			for _, subscriptionData := range amfStatusSubscriptions {
+				if doc, ok := subscriptionData.(map[string]interface{}); ok {
+					if subscriptionId, ok := doc["subscription_id"].(string); ok {
+						if data, ok := doc["data"].(map[string]interface{}); ok {
+							if subscription, ok := data["subscription"]; ok {
+								c.AMFStatusSubscriptions.Store(subscriptionId, subscription)
+							}
+						}
+					}
+				}
+			}
+			logger.CtxLog.Infof("Restored %d AMF status subscriptions from database", len(amfStatusSubscriptions))
+		}
+
+		nonUeN2Subscriptions, err := c.SubscriptionRepo.FindAllNonUeN2Subscriptions()
+		if err != nil {
+			logger.CtxLog.Warnf("Failed to restore Non-UE N2 subscriptions: %v", err)
+		} else {
+			for _, subscriptionData := range nonUeN2Subscriptions {
+				if doc, ok := subscriptionData.(map[string]interface{}); ok {
+					if subscriptionId, ok := doc["subscription_id"].(string); ok {
+						if data, ok := doc["data"].(map[string]interface{}); ok {
+							if subscription, ok := data["subscription"]; ok {
+								c.NonUeN2InfoSubscriptions.Store(subscriptionId, subscription)
+							}
+						}
+					}
+				}
+			}
+			logger.CtxLog.Infof("Restored %d Non-UE N2 subscriptions from database", len(nonUeN2Subscriptions))
 		}
 	}
 

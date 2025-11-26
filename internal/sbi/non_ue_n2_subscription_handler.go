@@ -149,7 +149,7 @@ func (s *Server) CreateNonUeN2MessageSubscription(createData *NonUeN2InfoSubscri
 
 	subscriptionId := generateN2SubscriptionId()
 
-	s.amfContext.NonUeN2InfoSubscriptions.Store(subscriptionId, createData)
+	s.amfContext.StoreNonUeN2InfoSubscription(subscriptionId, createData)
 
 	logger.SbiLog.Infof("Created Non-UE N2 Info subscription %s for class %s", subscriptionId, createData.N2InformationClass)
 
@@ -161,7 +161,7 @@ func (s *Server) CreateNonUeN2MessageSubscription(createData *NonUeN2InfoSubscri
 }
 
 func (s *Server) DeleteNonUeN2MessageSubscription(subscriptionId string) *ProblemDetails {
-	if _, ok := s.amfContext.NonUeN2InfoSubscriptions.Load(subscriptionId); !ok {
+	if _, ok := s.amfContext.GetNonUeN2InfoSubscription(subscriptionId); !ok {
 		return &ProblemDetails{
 			Type:   "about:blank",
 			Title:  "Not Found",
@@ -170,7 +170,7 @@ func (s *Server) DeleteNonUeN2MessageSubscription(subscriptionId string) *Proble
 		}
 	}
 
-	s.amfContext.NonUeN2InfoSubscriptions.Delete(subscriptionId)
+	s.amfContext.DeleteNonUeN2InfoSubscription(subscriptionId)
 
 	logger.SbiLog.Infof("Deleted Non-UE N2 Info subscription %s", subscriptionId)
 
