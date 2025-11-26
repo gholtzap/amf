@@ -637,3 +637,85 @@ func contains(slice []int, item int) bool {
 	}
 	return false
 }
+
+func GenerateEAPRequest(identifier uint8, rand []byte, autn []byte) []byte {
+	eapMsg := make([]byte, 0)
+
+	eapMsg = append(eapMsg, 0x01)
+	eapMsg = append(eapMsg, identifier)
+
+	eapPayload := make([]byte, 0)
+	eapPayload = append(eapPayload, 0x17)
+
+	eapPayload = append(eapPayload, 0x05)
+
+	eapPayload = append(eapPayload, rand...)
+
+	eapPayload = append(eapPayload, autn...)
+
+	eapLength := uint16(4 + len(eapPayload))
+	lengthBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBytes, eapLength)
+	eapMsg = append(eapMsg, lengthBytes...)
+
+	eapMsg = append(eapMsg, eapPayload...)
+
+	return eapMsg
+}
+
+func VerifyEAPResponse(eapResponse []byte, expectedRand []byte) (bool, []byte, error) {
+	if len(eapResponse) < 5 {
+		return false, nil, fmt.Errorf("EAP response too short")
+	}
+
+	if eapResponse[0] != 0x02 {
+		return false, nil, fmt.Errorf("not an EAP response")
+	}
+
+	if eapResponse[4] != 0x17 {
+		return false, nil, fmt.Errorf("not an EAP-AKA' response")
+	}
+
+	if len(eapResponse) < 6 {
+		return false, nil, fmt.Errorf("EAP-AKA' response too short")
+	}
+
+	subtype := eapResponse[5]
+	if subtype != 0x02 {
+		return false, nil, fmt.Errorf("unexpected EAP-AKA' subtype: %d", subtype)
+	}
+
+	offset := 6
+	var res []byte
+
+	for offset < len(eapResponse) {
+		if offset+2 > len(eapResponse) {
+			break
+		}
+
+		attrType := eapResponse[offset]
+		attrLen := int(eapResponse[offset+1]) * 4
+
+		if attrLen < 4 || offset+attrLen > len(eapResponse) {
+			break
+		}
+
+		if attrType == 0x03 {
+			if offset+4 <= len(eapResponse) {
+				resLen := int(binary.BigEndian.Uint16(eapResponse[offset+2 : offset+4]))
+				if offset+4+resLen <= len(eapResponse) {
+					res = eapResponse[offset+4 : offset+4+resLen]
+				}
+			}
+			break
+		}
+
+		offset += attrLen
+	}
+
+	if len(res) == 0 {
+		return false, nil, fmt.Errorf("no RES found in EAP response")
+	}
+
+	return true, res, nil
+}

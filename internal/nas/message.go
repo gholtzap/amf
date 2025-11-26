@@ -125,15 +125,17 @@ const (
 )
 
 const (
-	MsgTypePDUSessionEstablishmentRequest = 0xc1
-	MsgTypePDUSessionEstablishmentAccept  = 0xc2
-	MsgTypePDUSessionEstablishmentReject  = 0xc3
-	MsgTypePDUSessionModificationRequest  = 0xc9
-	MsgTypePDUSessionModificationCommand  = 0xca
-	MsgTypePDUSessionReleaseRequest       = 0xd1
-	MsgTypePDUSessionReleaseCommand       = 0xd2
-	MsgTypePDUSessionReleaseComplete      = 0xd3
-	MsgTypeFiveGSMStatus                  = 0x64
+	MsgTypePDUSessionEstablishmentRequest  = 0xc1
+	MsgTypePDUSessionEstablishmentAccept   = 0xc2
+	MsgTypePDUSessionEstablishmentReject   = 0xc3
+	MsgTypePDUSessionAuthenticationCommand = 0xc5
+	MsgTypePDUSessionAuthenticationComplete = 0xc6
+	MsgTypePDUSessionModificationRequest   = 0xc9
+	MsgTypePDUSessionModificationCommand   = 0xca
+	MsgTypePDUSessionReleaseRequest        = 0xd1
+	MsgTypePDUSessionReleaseCommand        = 0xd2
+	MsgTypePDUSessionReleaseComplete       = 0xd3
+	MsgTypeFiveGSMStatus                   = 0x64
 )
 
 const (

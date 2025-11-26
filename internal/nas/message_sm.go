@@ -101,6 +101,14 @@ type FiveGSMStatusMsg struct {
 	Cause5GSM uint8
 }
 
+type PDUSessionAuthenticationCommandMsg struct {
+	EAPMessage []byte
+}
+
+type PDUSessionAuthenticationCompleteMsg struct {
+	EAPMessage []byte
+}
+
 func DecodeULNASTransport(payload []byte) (*ULNASTransportMsg, error) {
 	if len(payload) < 2 {
 		return nil, fmt.Errorf("UL NAS transport too short")
@@ -701,4 +709,64 @@ func EncodeFiveGSMStatus(msg *FiveGSMStatusMsg) []byte {
 	payload := make([]byte, 0)
 	payload = append(payload, msg.Cause5GSM)
 	return payload
+}
+
+func EncodePDUSessionAuthenticationCommand(msg *PDUSessionAuthenticationCommandMsg) []byte {
+	payload := make([]byte, 0)
+
+	if len(msg.EAPMessage) > 0 {
+		payload = append(payload, 0x78)
+		lengthBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(lengthBytes, uint16(len(msg.EAPMessage)))
+		payload = append(payload, lengthBytes...)
+		payload = append(payload, msg.EAPMessage...)
+	}
+
+	return payload
+}
+
+func DecodePDUSessionAuthenticationComplete(payload []byte) (*PDUSessionAuthenticationCompleteMsg, error) {
+	msg := &PDUSessionAuthenticationCompleteMsg{}
+	offset := 0
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x78:
+			if offset+1 >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid EAP message length")
+			}
+			msg.EAPMessage = payload[offset : offset+length]
+			offset += length
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
 }

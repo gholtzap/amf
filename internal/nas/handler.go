@@ -1160,6 +1160,8 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 	switch smMsgType {
 	case MsgTypePDUSessionEstablishmentRequest:
 		return h.HandlePDUSessionEstablishmentRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer, ulMsg.DNN, ulMsg.SNSSAI)
+	case MsgTypePDUSessionAuthenticationComplete:
+		return h.HandlePDUSessionAuthenticationComplete(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	case MsgTypePDUSessionModificationRequest:
 		return h.HandlePDUSessionModificationRequest(ue, ulMsg.PDUSessionID, ulMsg.PayloadContainer)
 	case MsgTypePDUSessionReleaseRequest:
@@ -1191,6 +1193,12 @@ func (h *Handler) HandlePDUSessionEstablishmentRequest(ue *context.UEContext, pd
 	dnnStr := "internet"
 	if len(dnn) > 0 {
 		dnnStr = string(dnn)
+	}
+
+	requireEap := h.requireEapAuthentication(dnnStr)
+	if requireEap {
+		logger.NasLog.Infof("EAP authentication required for DNN: %s", dnnStr)
+		return h.initiateEapAuthentication(ue, pduSessionID, smReq, dnn, snssai, dnnStr)
 	}
 
 	smfClient := consumer.NewSMFClient(h.amfContext.SmfUri)
@@ -1542,6 +1550,222 @@ func (h *Handler) HandlePDUSessionReleaseRequest(ue *context.UEContext, pduSessi
 	}
 
 	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandlePDUSessionAuthenticationComplete(ue *context.UEContext, pduSessionID uint8, smMsg []byte) error {
+	logger.NasLog.Infof("Handle PDU Session Authentication Complete for UE SUPI: %s, PDU Session ID: %d", ue.Supi, pduSessionID)
+
+	if len(smMsg) < 3 {
+		return fmt.Errorf("SM message too short")
+	}
+
+	smPayload := smMsg[3:]
+	authComplete, err := DecodePDUSessionAuthenticationComplete(smPayload)
+	if err != nil {
+		return fmt.Errorf("failed to decode PDU session authentication complete: %v", err)
+	}
+
+	pduSession, ok := ue.GetPduSession(int32(pduSessionID))
+	if !ok {
+		logger.NasLog.Errorf("PDU Session %d not found for UE %s", pduSessionID, ue.Supi)
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x36)
+	}
+
+	if pduSession.EapState != context.EapStateInProgress {
+		logger.NasLog.Warnf("PDU Session %d not in authentication state", pduSessionID)
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x36)
+	}
+
+	if len(authComplete.EAPMessage) == 0 {
+		logger.NasLog.Errorf("No EAP message in authentication complete")
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x36)
+	}
+
+	valid, res, err := VerifyEAPResponse(authComplete.EAPMessage, pduSession.EapRand)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to verify EAP response: %v", err)
+		pduSession.EapState = context.EapStateFailed
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x1d)
+	}
+
+	if !valid || len(res) == 0 {
+		logger.NasLog.Errorf("EAP authentication failed for PDU Session %d", pduSessionID)
+		pduSession.EapState = context.EapStateFailed
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x1d)
+	}
+
+	logger.NasLog.Infof("PDU Session authentication successful for PDU Session %d", pduSessionID)
+	pduSession.EapState = context.EapStateSuccess
+
+	if len(pduSession.RequestMsg) == 0 {
+		logger.NasLog.Errorf("No saved establishment request for PDU Session %d", pduSessionID)
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x1a)
+	}
+
+	logger.NasLog.Infof("Resuming PDU session establishment after successful authentication")
+	return h.completePDUSessionEstablishment(ue, pduSessionID, pduSession)
+}
+
+func (h *Handler) SendPDUSessionAuthenticationCommand(ue *context.UEContext, pduSessionID uint8, rand []byte, autn []byte, identifier uint8) error {
+	logger.NasLog.Infof("Sending PDU Session Authentication Command for PDU Session ID: %d", pduSessionID)
+
+	eapRequest := GenerateEAPRequest(identifier, rand, autn)
+
+	authCmd := &PDUSessionAuthenticationCommandMsg{
+		EAPMessage: eapRequest,
+	}
+
+	smAuthPayload := EncodePDUSessionAuthenticationCommand(authCmd)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionAuthenticationCommand)
+	smPDU = append(smPDU, smAuthPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) completePDUSessionEstablishment(ue *context.UEContext, pduSessionID uint8, pduSession *context.PduSessionContext) error {
+	logger.NasLog.Infof("Completing PDU Session Establishment for PDU Session ID: %d", pduSessionID)
+
+	if pduSession.PduSessionType == 0 {
+		pduSession.PduSessionType = 0x01
+	}
+
+	acceptMsg := &PDUSessionEstablishmentAcceptMsg{
+		PDUSessionType: pduSession.PduSessionType,
+		SSCMode:        pduSession.SscMode,
+		SessionAMBR:    []byte{0x3e, 0x80, 0x3e, 0x80},
+		QoSRules:       []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01},
+		PDUAddress:     []byte{0x01, 192, 168, 100, 10},
+	}
+
+	if pduSession.AlwaysOn {
+		acceptMsg.AlwaysOnPDUSessionIndication = 1
+	}
+
+	smAcceptPayload := EncodePDUSessionEstablishmentAccept(acceptMsg)
+
+	smPDU := make([]byte, 0)
+	smPDU = append(smPDU, ProtocolDiscriminator5GSM)
+	smPDU = append(smPDU, pduSessionID)
+	smPDU = append(smPDU, 0x00)
+	smPDU = append(smPDU, MsgTypePDUSessionEstablishmentAccept)
+	smPDU = append(smPDU, smAcceptPayload...)
+
+	dlMsg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeN1SMInfo,
+		PayloadContainer:     smPDU,
+		PDUSessionID:         pduSessionID,
+	}
+
+	dlPayload := EncodeDLNASTransport(dlMsg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, dlPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	n2SmInfo := []byte{}
+
+	if h.ngapHandler != nil {
+		return h.ngapHandler.SendPDUSessionResourceSetupRequest(
+			ue.RanUeNgapId, ue.AmfUeNgapId, pduSessionID, nasData, n2SmInfo)
+	}
+
+	return nil
+}
+
+func (h *Handler) requireEapAuthentication(dnn string) bool {
+	return false
+}
+
+func (h *Handler) initiateEapAuthentication(ue *context.UEContext, pduSessionID uint8, smReq *PDUSessionEstablishmentRequestMsg, dnn []byte, snssai []byte, dnnStr string) error {
+	logger.NasLog.Infof("Initiating EAP authentication for PDU Session %d", pduSessionID)
+
+	rand := make([]byte, 16)
+	for i := range rand {
+		rand[i] = byte(i + 1)
+	}
+
+	autn := make([]byte, 16)
+	for i := range autn {
+		autn[i] = byte(i + 0x10)
+	}
+
+	identifier := uint8(1)
+
+	selectedSscMode := h.selectSscMode(smReq.SSCMode, dnnStr)
+
+	smfClient := consumer.NewSMFClient(h.amfContext.SmfUri)
+
+	createData := &consumer.SmContextCreateData{
+		Supi:         ue.Supi,
+		Dnn:          dnnStr,
+		PduSessionId: int32(pduSessionID),
+		ServingNfId:  h.amfContext.Name,
+		RequestType:  "INITIAL_REQUEST",
+		AnType:       "3GPP_ACCESS",
+		RatType:      "NR",
+	}
+
+	if len(snssai) > 0 && len(snssai) >= 4 {
+		createData.SNssai = &consumer.SNssai{
+			Sst: int(snssai[1]),
+		}
+		if len(snssai) > 4 {
+			sd := fmt.Sprintf("%02x%02x%02x", snssai[2], snssai[3], snssai[4])
+			createData.SNssai.Sd = sd
+		}
+	}
+
+	createResp, err := smfClient.CreateSMContext(createData)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to create SM context: %v", err)
+		return h.SendPDUSessionEstablishmentReject(ue, pduSessionID, 0x1a)
+	}
+
+	pduSessionCtx := &context.PduSessionContext{
+		PduSessionId:   int32(pduSessionID),
+		SmContextRef:   createResp.SmContextRef,
+		SmContextId:    createResp.SmContextId,
+		Dnn:            dnnStr,
+		SessionAmbr:    &context.Ambr{Uplink: "100 Mbps", Downlink: "100 Mbps"},
+		State:          context.PduSessionInactive,
+		AlwaysOn:       smReq.AlwaysOnPDUSessionRequested == 1,
+		SscMode:        selectedSscMode,
+		PduSessionType: smReq.PDUSessionType,
+		EapState:       context.EapStateInProgress,
+		EapIdentifier:  identifier,
+		EapRand:        rand,
+		EapAutn:        autn,
+	}
+
+	ue.PduSessions[int32(pduSessionID)] = pduSessionCtx
+	logger.NasLog.Infof("PDU Session %d created with EAP authentication pending", pduSessionID)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return h.SendPDUSessionAuthenticationCommand(ue, pduSessionID, rand, autn, identifier)
 }
 
 func (h *Handler) SendConfigurationUpdateCommand(ue *context.UEContext, newGuti *context.Guti) error {

@@ -208,25 +208,38 @@ type UeSecurityCapability struct {
 // PduSessionContext represents PDU Session context
 type PduSessionContext struct {
 	PduSessionId   int32
-	Dnn            string   // Data Network Name
-	Snssai         Snssai   // S-NSSAI
-	SessionAmbr    *Ambr    // Session AMBR
+	Dnn            string
+	Snssai         Snssai
+	SessionAmbr    *Ambr
 	QosFlows       map[int]*QosFlow
 	State          PduSessionState
-	AllocatedEbis  map[int32]int32 // EBI to ARP priority level mapping
+	AllocatedEbis  map[int32]int32
 	SmContextRef   string
 	SmContextId    string
 	AlwaysOn       bool
 	SscMode        uint8
 	PduSessionType uint8
+	EapState       EapAuthState
+	EapIdentifier  uint8
+	EapRand        []byte
+	EapAutn        []byte
+	RequestMsg     []byte
 }
 
-// PduSessionState represents PDU Session state
 type PduSessionState string
 
 const (
 	PduSessionInactive PduSessionState = "INACTIVE"
 	PduSessionActive   PduSessionState = "ACTIVE"
+)
+
+type EapAuthState string
+
+const (
+	EapStateNone       EapAuthState = "NONE"
+	EapStateInProgress EapAuthState = "IN_PROGRESS"
+	EapStateSuccess    EapAuthState = "SUCCESS"
+	EapStateFailed     EapAuthState = "FAILED"
 )
 
 // Ambr represents Aggregate Maximum Bit Rate
