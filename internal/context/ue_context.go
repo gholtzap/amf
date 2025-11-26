@@ -253,8 +253,10 @@ type Ambr struct {
 // QosFlow represents QoS Flow
 type QosFlow struct {
 	QosFlowId     int
-	FiveQi        int    // 5G QoS Identifier
+	FiveQi        int
 	QosParameters *QosParameters
+	ReflectiveQosIndicator bool
+	ReflectiveQosTimer     uint16
 }
 
 // QosParameters represents QoS parameters

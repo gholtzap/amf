@@ -103,6 +103,7 @@
 - Always-on PDU session handling
 - SSC mode selection
 - MPTCP support
+- Reflective QoS
 
 ### SBI (Service-Based Interfaces)
 
@@ -193,7 +194,6 @@
 
 ### NAS SM Procedures
 - QoS Flow management (detailed)
-- Reflective QoS
 
 ### SBI Services - Missing/Incomplete
 
@@ -217,7 +217,6 @@
 - Edge computing support (MEC)
 - Dual Registration (4G+5G)
 - Multi-access PDU connectivity service
-- Reflective QoS control
 - UE Policy Delivery Service
 - SMS over NAS
 - LPP (Location Positioning Protocol)

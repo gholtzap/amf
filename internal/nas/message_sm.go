@@ -785,3 +785,106 @@ func DecodePDUSessionAuthenticationComplete(payload []byte) (*PDUSessionAuthenti
 
 	return msg, nil
 }
+
+type QoSRule struct {
+	Identifier          uint8
+	Precedence          uint8
+	QFI                 uint8
+	PacketFilterList    []PacketFilter
+	ReflectiveQosActive bool
+	ReflectiveQosTimer  uint16
+}
+
+type PacketFilter struct {
+	Direction       uint8
+	Identifier      uint8
+	ComponentType   uint8
+	ComponentValue  []byte
+}
+
+const (
+	RuleOperationCodeCreateNewQoSRule    = 0x01
+	RuleOperationCodeDeleteExistingQoSRule = 0x02
+	RuleOperationCodeModifyExistingQoSRule = 0x03
+	PacketFilterDirectionDownlink        = 0x01
+	PacketFilterDirectionUplink          = 0x02
+	PacketFilterDirectionBidirectional   = 0x03
+)
+
+func BuildQoSRules(rules []QoSRule) []byte {
+	if len(rules) == 0 {
+		return []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	}
+
+	result := make([]byte, 0)
+
+	for _, rule := range rules {
+		ruleBytes := encodeQoSRule(rule)
+		result = append(result, ruleBytes...)
+	}
+
+	return result
+}
+
+func encodeQoSRule(rule QoSRule) []byte {
+	ruleData := make([]byte, 0)
+
+	numFilters := len(rule.PacketFilterList)
+	if numFilters > 15 {
+		numFilters = 15
+	}
+
+	ruleOpCode := uint8(RuleOperationCodeCreateNewQoSRule)
+	dqrBit := uint8(0)
+	if rule.ReflectiveQosActive {
+		dqrBit = 1
+	}
+	opCodeByte := (ruleOpCode << 5) | (dqrBit << 4) | uint8(numFilters)
+	ruleData = append(ruleData, opCodeByte)
+
+	for _, filter := range rule.PacketFilterList {
+		ruleData = append(ruleData, (filter.Direction<<4)|filter.Identifier)
+
+		filterContents := make([]byte, 0)
+		filterContents = append(filterContents, filter.ComponentType)
+		filterContents = append(filterContents, filter.ComponentValue...)
+		ruleData = append(ruleData, uint8(len(filterContents)))
+		ruleData = append(ruleData, filterContents...)
+	}
+
+	ruleData = append(ruleData, rule.Precedence)
+
+	ruleData = append(ruleData, rule.QFI)
+
+	segregationBit := uint8(0)
+	ruleData = append(ruleData, segregationBit)
+
+	if rule.ReflectiveQosActive && rule.ReflectiveQosTimer > 0 {
+		ruleData = append(ruleData, 0x01)
+		timerBytes := make([]byte, 2)
+		binary.BigEndian.PutUint16(timerBytes, rule.ReflectiveQosTimer)
+		ruleData = append(ruleData, timerBytes...)
+	}
+
+	result := make([]byte, 0)
+	result = append(result, rule.Identifier)
+	lengthBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(lengthBytes, uint16(len(ruleData)))
+	result = append(result, lengthBytes...)
+	result = append(result, ruleData...)
+
+	return result
+}
+
+func BuildDefaultQoSRule(qfi uint8, reflectiveQos bool, rqTimer uint16) []byte {
+	rule := QoSRule{
+		Identifier:          0x01,
+		Precedence:          0xFF,
+		QFI:                 qfi,
+		PacketFilterList:    []PacketFilter{},
+		ReflectiveQosActive: reflectiveQos,
+		ReflectiveQosTimer:  rqTimer,
+	}
+
+	return BuildQoSRules([]QoSRule{rule})
+}
