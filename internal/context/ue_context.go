@@ -39,6 +39,8 @@ type UEContext struct {
 	LastTai         *Tai   // Previous Tracking Area Identity (for mobility detection)
 	TaiList         []Tai  // List of allowed Tracking Area Identities
 	CellId          string
+	CurrentRNA      uint16   // Current RAN Notification Area
+	RNAList         []uint16 // List of configured RAN Notification Area IDs
 
 	// Security Context
 	SecurityContext *SecurityContext

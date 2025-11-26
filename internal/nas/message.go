@@ -24,6 +24,9 @@ const (
 	MsgTypeDeregistrationAcceptUEOriginating  = 0x46
 	MsgTypeDeregistrationRequestUETerminating = 0x47
 	MsgTypeDeregistrationAcceptUETerminating  = 0x48
+	MsgTypeControlPlaneServiceRequest = 0x49
+	MsgTypeNetworkSliceSpecificAuthenticationCommand = 0x4a
+	MsgTypeNetworkSliceSpecificAuthenticationComplete = 0x4b
 	MsgTypeServiceRequest             = 0x4c
 	MsgTypeServiceReject              = 0x4d
 	MsgTypeServiceAccept              = 0x4e
@@ -77,6 +80,10 @@ const (
 	IEIT3412ExtendedValue = 0x5e
 	IEIRequestedT3324Value = 0x6a
 	IEIRequestedT3412ExtendedValue = 0x73
+	IEINetworkSlicingIndication = 0x09
+	IEIServiceAreaList = 0x27
+	IEINonCurrentNativeNASKeySetIdentifier = 0x0c
+	IEIRNAUpdateResult = 0x79
 )
 
 const (
@@ -89,6 +96,17 @@ const (
 const (
 	DeregistrationReRegistrationNotRequired = 0x00
 	DeregistrationReRegistrationRequired    = 0x08
+)
+
+const (
+	ControlPlaneServiceTypeMOData             = 0x01
+	ControlPlaneServiceTypeMOVoice            = 0x02
+	ControlPlaneServiceTypeMOSMS              = 0x03
+	ControlPlaneServiceTypeMTVoice            = 0x04
+	ControlPlaneServiceTypeMTSMS              = 0x05
+	ControlPlaneServiceTypeEmergencyServices  = 0x06
+	ControlPlaneServiceTypeEmergencyServicesFallback = 0x07
+	ControlPlaneServiceTypeRNAUpdate          = 0x08
 )
 
 const (
@@ -286,6 +304,23 @@ type ServiceRejectMsg struct {
 	T3346Value           []byte
 	EAPMessage           []byte
 	T3448Value           []byte
+}
+
+type ControlPlaneServiceRequest struct {
+	NgKSI                   uint8
+	ServiceType             uint8
+	CIoTSmallDataContainer  []byte
+	PayloadContainerType    uint8
+	PayloadContainer        []byte
+	PduSessionId            uint8
+	ReleaseAssistanceIndication uint8
+	UplinkDataStatus        []byte
+	AllowedPduSessionStatus []byte
+	RequestedNSSAI          []byte
+	OldPduSessionId         uint8
+}
+
+type ControlPlaneServiceAccept struct {
 }
 
 type DeregistrationRequestMsg struct {
@@ -1209,6 +1244,131 @@ func DecodeServiceRequest(payload []byte) (*ServiceRequestMsg, error) {
 	return msg, nil
 }
 
+func DecodeControlPlaneServiceRequest(payload []byte) (*ControlPlaneServiceRequest, error) {
+	if len(payload) < 1 {
+		return nil, fmt.Errorf("control plane service request too short")
+	}
+
+	msg := &ControlPlaneServiceRequest{}
+	offset := 0
+
+	msg.NgKSI = (payload[offset] >> 4) & 0x0f
+	msg.ServiceType = payload[offset] & 0x0f
+	offset++
+
+	for offset < len(payload) {
+		if offset >= len(payload) {
+			break
+		}
+
+		iei := payload[offset]
+		offset++
+
+		switch iei {
+		case 0x6B:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid CIoT small data container length")
+			}
+			msg.CIoTSmallDataContainer = payload[offset : offset+length]
+			offset += length
+
+		case IEIPayloadContainerType:
+			if offset < len(payload) {
+				msg.PayloadContainerType = payload[offset] & 0x0f
+			}
+
+		case IEIPayloadContainer:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid payload container length")
+			}
+			msg.PayloadContainer = payload[offset : offset+length]
+			offset += length
+
+		case IEIPDUSessionID:
+			if offset < len(payload) {
+				msg.PduSessionId = payload[offset]
+				offset++
+			}
+
+		case 0x40:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid uplink data status length")
+			}
+			msg.UplinkDataStatus = payload[offset : offset+length]
+			offset += length
+
+		case 0x25:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(binary.BigEndian.Uint16(payload[offset : offset+2]))
+			offset += 2
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid allowed PDU session status length")
+			}
+			msg.AllowedPduSessionStatus = payload[offset : offset+length]
+			offset += length
+
+		case IEIRequestedNSSAI:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			length := int(payload[offset])
+			offset++
+			if offset+length > len(payload) {
+				return nil, fmt.Errorf("invalid requested NSSAI length")
+			}
+			msg.RequestedNSSAI = payload[offset : offset+length]
+			offset += length
+
+		case 0x1B:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			msg.ReleaseAssistanceIndication = payload[offset] & 0x0f
+
+		case 0x26:
+			if offset < len(payload) {
+				msg.OldPduSessionId = payload[offset]
+				offset++
+			}
+
+		default:
+			if offset >= len(payload) {
+				return msg, nil
+			}
+			if iei&0x80 == 0 {
+				if offset >= len(payload) {
+					return msg, nil
+				}
+				length := int(payload[offset])
+				offset++
+				if offset+length > len(payload) {
+					return msg, nil
+				}
+				offset += length
+			}
+		}
+	}
+
+	return msg, nil
+}
+
 func EncodeServiceAccept(msg *ServiceAcceptMsg) []byte {
 	payload := make([]byte, 0)
 
@@ -1244,6 +1404,11 @@ func EncodeServiceAccept(msg *ServiceAcceptMsg) []byte {
 		payload = append(payload, msg.EAPMessage...)
 	}
 
+	return payload
+}
+
+func EncodeControlPlaneServiceAccept(msg *ControlPlaneServiceAccept) []byte {
+	payload := make([]byte, 0)
 	return payload
 }
 

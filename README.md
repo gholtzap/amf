@@ -52,6 +52,9 @@
 - Algorithm negotiation
 - UE security capabilities matching
 
+#### Mobility
+- Idle mode mobility (RAN Notification Area update)
+
 #### Other MM Procedures
 - Service Request/Accept
 - Extended service request
@@ -179,7 +182,6 @@
 - Intra-AMF mobility (N2 handover)
 - Inter-AMF mobility
 - Inter-system mobility (4G/5G)
-- Idle mode mobility
 
 #### Connection Management
 - Service Request with emergency fallback

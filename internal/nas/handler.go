@@ -66,6 +66,8 @@ func (h *Handler) HandleNASMessage(ue *context.UEContext, nasPDU []byte) error {
 		return h.HandleDeregistrationAccept(ue, pdu.Payload)
 	case MsgTypeServiceRequest:
 		return h.HandleServiceRequest(ue, pdu.Payload)
+	case MsgTypeControlPlaneServiceRequest:
+		return h.HandleControlPlaneServiceRequest(ue, pdu.Payload)
 	case MsgTypeExtendedServiceRequest:
 		return h.HandleExtendedServiceRequest(ue, pdu.Payload)
 	case MsgTypeRegistrationComplete:
@@ -882,6 +884,26 @@ func (h *Handler) SendServiceAccept(ue *context.UEContext, activePduSessions []u
 	return nil
 }
 
+func (h *Handler) SendControlPlaneServiceAccept(ue *context.UEContext) error {
+	logger.NasLog.Infof("Sending Control Plane Service Accept to UE SUPI: %s", ue.Supi)
+
+	msg := &ControlPlaneServiceAccept{}
+
+	acceptPayload := EncodeControlPlaneServiceAccept(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeServiceAccept, acceptPayload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	if err := h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (h *Handler) SendServiceReject(ue *context.UEContext, cause uint8) error {
 	logger.NasLog.Infof("Sending Service Reject to UE SUPI: %s with cause: 0x%02x", ue.Supi, cause)
 
@@ -1004,6 +1026,84 @@ func (h *Handler) HandleExtendedServiceRequest(ue *context.UEContext, payload []
 	}
 
 	return h.SendServiceAccept(ue, activePduSessions)
+}
+
+func (h *Handler) HandleControlPlaneServiceRequest(ue *context.UEContext, payload []byte) error {
+	logger.NasLog.Infof("Handle Control Plane Service Request for UE SUPI: %s", ue.Supi)
+
+	cpSrvReq, err := DecodeControlPlaneServiceRequest(payload)
+	if err != nil {
+		logger.NasLog.Errorf("Failed to decode control plane service request: %v", err)
+		return h.SendServiceReject(ue, CauseProtocolError)
+	}
+
+	logger.NasLog.Infof("CP Service Type: %d, NgKSI: %d", cpSrvReq.ServiceType, cpSrvReq.NgKSI)
+
+	if ue.RmState != context.RmRegistered {
+		logger.NasLog.Errorf("UE not in RM-REGISTERED state: %s", ue.RmState)
+		return h.SendServiceReject(ue, Cause5GSServicesNotAllowed)
+	}
+
+	if ue.SecurityContext == nil || !ue.SecurityContext.Activated {
+		logger.NasLog.Errorf("Security context not activated for UE: %s", ue.Supi)
+		return h.SendServiceReject(ue, CauseSecurityModeRejectedUnspecified)
+	}
+
+	if int(cpSrvReq.NgKSI) != ue.NgKsi {
+		logger.NasLog.Warnf("NgKSI mismatch - Request: %d, Expected: %d", cpSrvReq.NgKSI, ue.NgKsi)
+	}
+
+	if cpSrvReq.ServiceType == ControlPlaneServiceTypeRNAUpdate {
+		logger.NasLog.Infof("RNA Update requested for UE: %s", ue.Supi)
+		return h.HandleRNAUpdate(ue, cpSrvReq)
+	}
+
+	ue.CmState = context.CmConnected
+	ue.StopT3513()
+
+	h.notifyConnectivityStateChange(ue)
+
+	if err := h.DeliverPendingMessages(ue); err != nil {
+		logger.NasLog.Warnf("Failed to deliver pending messages: %v", err)
+	}
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return h.SendServiceAccept(ue, []uint8{})
+}
+
+func (h *Handler) HandleRNAUpdate(ue *context.UEContext, cpSrvReq *ControlPlaneServiceRequest) error {
+	logger.NasLog.Infof("Processing RNA Update for UE: %s", ue.Supi)
+
+	if cpSrvReq.AllowedPduSessionStatus != nil && len(cpSrvReq.AllowedPduSessionStatus) > 0 {
+		logger.NasLog.Infof("Allowed PDU Session Status present in RNA Update")
+		for i := 0; i < len(cpSrvReq.AllowedPduSessionStatus) && i < 16; i++ {
+			statusByte := cpSrvReq.AllowedPduSessionStatus[i]
+			for bit := 0; bit < 8; bit++ {
+				if statusByte&(1<<bit) != 0 {
+					pduSessionId := int32(i*8 + bit)
+					if pduSession, ok := ue.GetPduSession(pduSessionId); ok {
+						logger.NasLog.Infof("PDU Session %d is allowed in RNA Update", pduSessionId)
+						if pduSession.State == context.PduSessionActive {
+							logger.NasLog.Infof("PDU Session %d remains active", pduSessionId)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if cpSrvReq.RequestedNSSAI != nil {
+		logger.NasLog.Infof("Requested NSSAI present in RNA Update")
+	}
+
+	if cpSrvReq.OldPduSessionId != 0 {
+		logger.NasLog.Infof("Old PDU Session ID: %d", cpSrvReq.OldPduSessionId)
+	}
+
+	return h.SendControlPlaneServiceAccept(ue)
 }
 
 func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) error {
