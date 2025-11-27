@@ -1182,6 +1182,11 @@ func (h *Handler) HandleULNASTransport(ue *context.UEContext, payload []byte) er
 	logger.NasLog.Infof("Payload Container Type: 0x%02x, PDU Session ID: %d",
 		ulMsg.PayloadContainerType, ulMsg.PDUSessionID)
 
+	if ulMsg.PayloadContainerType == PayloadContainerTypeUEParameterUpdate {
+		logger.NasLog.Infof("Received UE Parameter Update response from UE")
+		return h.HandleUEParameterUpdateResponse(ue, ulMsg.PayloadContainer)
+	}
+
 	if ulMsg.PayloadContainerType != PayloadContainerTypeN1SMInfo {
 		logger.NasLog.Warnf("Unsupported payload container type: 0x%02x", ulMsg.PayloadContainerType)
 		return h.SendFiveGMMStatus(ue, CauseMessageTypeNotCompatible)
@@ -2061,6 +2066,43 @@ func (h *Handler) HandleGenericUEConfigurationUpdateComplete(ue *context.UEConte
 	}
 
 	logger.NasLog.Infof("Generic UE Configuration Update Complete processed successfully for UE: %s", ue.Supi)
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) SendUEParameterUpdate(ue *context.UEContext, updateData []byte) error {
+	logger.NasLog.Infof("Sending UE Parameter Update to UE SUPI: %s", ue.Supi)
+
+	msg := &DLNASTransportMsg{
+		PayloadContainerType: PayloadContainerTypeUEParameterUpdate,
+		PayloadContainer:     updateData,
+	}
+
+	payload := EncodeDLNASTransport(msg)
+
+	nasData, err := EncodeSecuredNASPDU(ue, MsgTypeDLNASTransport, payload,
+		SecurityHeaderTypeIntegrityProtectedAndCiphered)
+	if err != nil {
+		return fmt.Errorf("failed to encode secured NAS PDU: %v", err)
+	}
+
+	ue.LastParameterUpdateTime = time.Now()
+
+	if err := h.amfContext.PersistUEContext(ue); err != nil {
+		logger.NasLog.Warnf("Failed to persist UE context: %v", err)
+	}
+
+	return h.ngapHandler.SendDownlinkNASTransport(ue.RanUeNgapId, ue.AmfUeNgapId, nasData)
+}
+
+func (h *Handler) HandleUEParameterUpdateResponse(ue *context.UEContext, payloadContainer []byte) error {
+	logger.NasLog.Infof("Handle UE Parameter Update Response for UE SUPI: %s", ue.Supi)
+
+	logger.NasLog.Infof("UE Parameter Update acknowledged by UE, payload length: %d bytes", len(payloadContainer))
 
 	if err := h.amfContext.PersistUEContext(ue); err != nil {
 		logger.NasLog.Warnf("Failed to persist UE context: %v", err)

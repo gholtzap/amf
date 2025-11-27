@@ -19,6 +19,7 @@ import (
 
 type NASHandler interface {
 	SendDeregistrationRequest(ue *context.UEContext, deregType uint8, cause uint8, reregistrationRequired bool) error
+	SendUEParameterUpdate(ue *context.UEContext, updateData []byte) error
 }
 
 type NGAPHandler interface {
@@ -72,6 +73,8 @@ func (s *Server) registerRoutes() {
 
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts", s.handleUEContexts)
 	s.router.HandleFunc("/namf-comm/v1/ue-contexts/", s.handleUEContext)
+
+	s.router.HandleFunc("/namf-comm/v1/ue-parameter-update", s.handleUEParameterUpdate)
 
 	s.router.HandleFunc("/namf-comm/v1/non-ue-n2-messages/transfer", s.handleNonUeN2MessageTransfer)
 

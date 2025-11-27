@@ -121,6 +121,11 @@ type UEContext struct {
 	// PSM (Power Saving Mode)
 	PSMParameters *PSMParameters
 
+	RoutingIndicator         string
+	DisasterRoamingEnabled   bool
+	DefaultConfiguredNSSAI   []byte
+	LastParameterUpdateTime  time.Time
+
 	PendingMessages []*PendingN1N2Message
 }
 
