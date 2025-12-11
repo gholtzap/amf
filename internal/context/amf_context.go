@@ -192,6 +192,19 @@ func (c *AMFContext) GetUEContextByGuti(guti *Guti) (*UEContext, bool) {
 	return nil, false
 }
 
+func (c *AMFContext) GetUEBySupi(supi string) *UEContext {
+	var foundUe *UEContext
+	c.UeContexts.Range(func(key, value interface{}) bool {
+		ue := value.(*UEContext)
+		if ue.Supi == supi {
+			foundUe = ue
+			return false
+		}
+		return true
+	})
+	return foundUe
+}
+
 func (c *AMFContext) DeleteUEContext(amfUeNgapId int64) {
 	c.UeContexts.Delete(amfUeNgapId)
 	logger.CtxLog.Infof("UE Context deleted, AMF UE NGAP ID: %d", amfUeNgapId)
