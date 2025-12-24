@@ -1,0 +1,94 @@
+{
+  "amf": {
+    "amf_name": "AMF-Rust",
+    "region_id": "01",
+    "set_id": "001",
+    "pointer": "01",
+    "guami_list": [
+      {
+        "plmn_id": {
+          "mcc": "001",
+          "mnc": "01"
+        },
+        "amf_region_id": "01",
+        "amf_set_id": "001",
+        "amf_pointer": "01"
+      }
+    ],
+    "plmn_support_list": [
+      {
+        "plmn_id": {
+          "mcc": "001",
+          "mnc": "01"
+        },
+        "s_nssai_list": [
+          {
+            "sst": 1,
+            "sd": null
+          },
+          {
+            "sst": 2,
+            "sd": "000001"
+          }
+        ],
+        "tai_list": [
+          {
+            "plmn_id": {
+              "mcc": "001",
+              "mnc": "01"
+            },
+            "tac": "000001"
+          }
+        ]
+      }
+    ],
+    "relative_capacity": 255
+  },
+  "sbi": {
+    "bind_addr": "127.0.0.1:8080",
+    "scheme": "http",
+    "registered_ip_addr": "127.0.0.1",
+    "port": 8080,
+    "api_root": "/namf"
+  },
+  "ngap": {
+    "bind_addr": "127.0.0.1:38412"
+  },
+  "database": {
+    "uri": "mongodb://localhost:27017",
+    "database_name": "amf"
+  },
+  "nrf": {
+    "uri": "http://127.0.0.1:8081"
+  },
+  "ausf": {
+    "uri": "http://127.0.0.1:8082"
+  },
+  "udm": {
+    "uri": "http://127.0.0.1:8083"
+  },
+  "security": {
+    "integrity_order": ["NIA2", "NIA1", "NIA3", "NIA0"],
+    "ciphering_order": ["NEA2", "NEA1", "NEA3", "NEA0"]
+  },
+  "timers": {
+    "t3502": 720,
+    "t3510": 15,
+    "t3511": 10,
+    "t3512": 3240,
+    "t3513": 6,
+    "t3516": 30,
+    "t3517": 10,
+    "t3519": 120,
+    "t3520": 15,
+    "t3521": 15,
+    "t3522": 6,
+    "t3525": 10,
+    "t3540": 10,
+    "t3550": 6,
+    "t3555": 6,
+    "t3560": 6,
+    "t3565": 6,
+    "t3570": 6
+  }
+}
