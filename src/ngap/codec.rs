@@ -216,6 +216,7 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
         }
 
         let ie_id = data[cursor];
+        let ie_length = data[cursor + 2] as usize;
         cursor += 3;
 
         match ie_id {
@@ -230,14 +231,14 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
                 cursor += consumed;
             }
             96 => {
-                if cursor + 1 <= data.len() {
+                if cursor + ie_length <= data.len() {
                     default_paging_drx = data[cursor] as u32;
-                    cursor += 1;
+                    cursor += ie_length;
                 }
             }
             _ => {
-                if cursor < data.len() {
-                    cursor += 1;
+                if cursor + ie_length <= data.len() {
+                    cursor += ie_length;
                 }
             }
         }
