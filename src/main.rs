@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
     });
 
     info!("Starting NGAP server on {}", config.ngap.bind_addr);
-    let ngap_config = config.ngap.clone();
+    let ngap_config = config.clone();
     let ngap_ue_context = ue_context.clone();
     let ngap_ran_context = ran_context.clone();
     let ngap_db = db.clone();

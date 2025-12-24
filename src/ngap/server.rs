@@ -10,15 +10,13 @@ use super::codec::{NgapPdu, NgapMessageValue};
 use super::handlers;
 
 pub async fn create_server(
-    ngap_config: &NgapConfig,
+    config: &Config,
     ue_context: UeContextManager,
     ran_context: RanContextManager,
     _db: Database,
 ) -> Result<()> {
-    let socket = Arc::new(UdpSocket::bind(&ngap_config.bind_addr).await?);
-    info!("NGAP server listening on {}", ngap_config.bind_addr);
-
-    let config = crate::config::load_config("config.json").await?;
+    let socket = Arc::new(UdpSocket::bind(&config.ngap.bind_addr).await?);
+    info!("NGAP server listening on {}", config.ngap.bind_addr);
 
     let mut buf = vec![0u8; 65536];
 
@@ -37,7 +35,7 @@ pub async fn create_server(
                         tokio::spawn(async move {
                             if let Err(e) = handle_ngap_message(
                                 pdu,
-                                &config_clone,
+                                config_clone,
                                 &ran_context_clone,
                                 &ue_context_clone,
                                 addr,
@@ -61,7 +59,7 @@ pub async fn create_server(
 
 async fn handle_ngap_message(
     pdu: NgapPdu,
-    config: &Config,
+    config: Config,
     ran_context: &RanContextManager,
     ue_context: &UeContextManager,
     addr: std::net::SocketAddr,
@@ -73,7 +71,7 @@ async fn handle_ngap_message(
                 NgapMessageValue::NgSetupRequest(request) => {
                     let response_pdu = handlers::handle_ng_setup_request(
                         request,
-                        config,
+                        &config,
                         ran_context,
                         addr,
                     ).await?;
