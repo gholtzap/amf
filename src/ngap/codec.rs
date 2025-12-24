@@ -40,7 +40,7 @@ pub enum NgapMessageValue {
     NgSetupRequest(NgSetupRequest),
     NgSetupResponse(NgSetupResponse),
     NgSetupFailure(NgSetupFailure),
-    InitialUeMessage,
+    InitialUeMessage(InitialUeMessage),
     UplinkNasTransport,
     Unknown,
 }
@@ -106,7 +106,8 @@ fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
             NgapMessageValue::NgSetupRequest(request)
         }
         NGAP_PROCEDURE_CODE_INITIAL_UE_MESSAGE => {
-            NgapMessageValue::InitialUeMessage
+            let message = decode_initial_ue_message(&data[2..])?;
+            NgapMessageValue::InitialUeMessage(message)
         }
         NGAP_PROCEDURE_CODE_UPLINK_NAS_TRANSPORT => {
             NgapMessageValue::UplinkNasTransport
@@ -448,4 +449,93 @@ fn encode_ng_setup_failure(failure: &NgSetupFailure, buf: &mut BytesMut) -> Resu
     }
 
     Ok(())
+}
+
+fn decode_initial_ue_message(data: &[u8]) -> Result<InitialUeMessage> {
+    let mut cursor = 0;
+    let mut ran_ue_ngap_id = None;
+    let mut nas_pdu = Vec::new();
+    let mut user_location_info = None;
+    let mut rrc_establishment_cause = 0;
+
+    while cursor < data.len() {
+        if cursor + 3 > data.len() {
+            break;
+        }
+
+        let ie_id = data[cursor];
+        cursor += 1;
+        let _criticality = data[cursor];
+        cursor += 1;
+        let length = data[cursor] as usize;
+        cursor += 1;
+
+        if cursor + length > data.len() {
+            break;
+        }
+
+        match ie_id {
+            85 => {
+                if length >= 4 {
+                    let id = u32::from_be_bytes([
+                        data[cursor],
+                        data[cursor + 1],
+                        data[cursor + 2],
+                        data[cursor + 3],
+                    ]) as u64;
+                    ran_ue_ngap_id = Some(id);
+                }
+                cursor += length;
+            }
+            38 => {
+                nas_pdu = data[cursor..cursor + length].to_vec();
+                cursor += length;
+            }
+            121 => {
+                if length >= 9 {
+                    let tai_plmn = decode_plmn_identity(&data[cursor..cursor + 3]);
+                    let tac = format!("{:02x}{:02x}{:02x}",
+                        data[cursor + 3], data[cursor + 4], data[cursor + 5]);
+
+                    let nr_cgi = if length >= 15 {
+                        let cgi_plmn = decode_plmn_identity(&data[cursor + 6..cursor + 9]);
+                        let nr_cell_id = format!("{:02x}{:02x}{:02x}{:02x}{:02x}",
+                            data[cursor + 9], data[cursor + 10], data[cursor + 11],
+                            data[cursor + 12], data[cursor + 13]);
+                        Some(NrCgi {
+                            plmn_identity: cgi_plmn,
+                            nr_cell_identity: nr_cell_id,
+                        })
+                    } else {
+                        None
+                    };
+
+                    user_location_info = Some(UserLocationInfo {
+                        nr_cgi,
+                        tai: Tai {
+                            plmn_identity: tai_plmn,
+                            tac,
+                        },
+                    });
+                }
+                cursor += length;
+            }
+            90 => {
+                if length >= 1 {
+                    rrc_establishment_cause = data[cursor];
+                }
+                cursor += length;
+            }
+            _ => {
+                cursor += length;
+            }
+        }
+    }
+
+    Ok(InitialUeMessage {
+        ran_ue_ngap_id: ran_ue_ngap_id.ok_or_else(|| anyhow!("Missing RAN-UE-NGAP-ID"))?,
+        nas_pdu,
+        user_location_info: user_location_info.ok_or_else(|| anyhow!("Missing User Location Info"))?,
+        rrc_establishment_cause,
+    })
 }

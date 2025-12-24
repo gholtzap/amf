@@ -76,3 +76,29 @@ pub struct Cause {
     pub cause_type: u8,
     pub cause_value: u8,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InitialUeMessage {
+    pub ran_ue_ngap_id: u64,
+    pub nas_pdu: Vec<u8>,
+    pub user_location_info: UserLocationInfo,
+    pub rrc_establishment_cause: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserLocationInfo {
+    pub nr_cgi: Option<NrCgi>,
+    pub tai: Tai,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NrCgi {
+    pub plmn_identity: PlmnIdentity,
+    pub nr_cell_identity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tai {
+    pub plmn_identity: PlmnIdentity,
+    pub tac: String,
+}

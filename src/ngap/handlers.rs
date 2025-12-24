@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::context::{RanContextManager, RanContext, RanState};
 use crate::context::{SupportedTa, BroadcastPlmn};
 use crate::context::{PlmnId as ContextPlmnId, SNssai as ContextSNssai};
+use crate::context::{UeContextManager, UeState, Tai as ContextTai, UePlmnId};
 use super::messages::*;
 use super::codec::*;
 
@@ -144,7 +145,41 @@ fn validate_supported_tai_list(tai_list: &[SupportedTaItem], config: &Config) ->
     true
 }
 
-pub async fn handle_initial_ue_message() -> Result<()> {
+pub async fn handle_initial_ue_message(
+    message: InitialUeMessage,
+    ran_context: &RanContextManager,
+    ue_context: &UeContextManager,
+    addr: SocketAddr,
+) -> Result<()> {
+    info!("Processing Initial UE Message from {}", addr);
+    debug!("Message: {:?}", message);
+
+    let ran_id = ran_context.get_by_addr(&addr)
+        .ok_or_else(|| anyhow!("RAN not found for address {}", addr))?
+        .ran_id;
+
+    let amf_ue_ngap_id = ue_context.allocate_amf_ue_ngap_id();
+    info!("Allocated AMF-UE-NGAP-ID: {} for RAN-UE-NGAP-ID: {}",
+          amf_ue_ngap_id, message.ran_ue_ngap_id);
+
+    let mut ue_ctx = ue_context.create_ue_context(amf_ue_ngap_id);
+    ue_ctx.ran_ue_ngap_id = Some(message.ran_ue_ngap_id);
+    ue_ctx.state = UeState::Connected;
+    ue_ctx.ran_id = Some(ran_id);
+    ue_ctx.tai = Some(ContextTai {
+        plmn_id: UePlmnId {
+            mcc: message.user_location_info.tai.plmn_identity.mcc.clone(),
+            mnc: message.user_location_info.tai.plmn_identity.mnc.clone(),
+        },
+        tac: message.user_location_info.tai.tac.clone(),
+    });
+
+    ue_context.update(ue_ctx);
+
+    info!("Created UE context for AMF-UE-NGAP-ID: {}, RRC Establishment Cause: {}",
+          amf_ue_ngap_id, message.rrc_establishment_cause);
+    debug!("NAS PDU length: {} bytes", message.nas_pdu.len());
+
     Ok(())
 }
 

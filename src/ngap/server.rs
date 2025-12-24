@@ -11,7 +11,7 @@ use super::handlers;
 
 pub async fn create_server(
     ngap_config: &NgapConfig,
-    _ue_context: UeContextManager,
+    ue_context: UeContextManager,
     ran_context: RanContextManager,
     _db: Database,
 ) -> Result<()> {
@@ -31,6 +31,7 @@ pub async fn create_server(
                     Ok(pdu) => {
                         let socket_clone = socket.clone();
                         let ran_context_clone = ran_context.clone();
+                        let ue_context_clone = ue_context.clone();
                         let config_clone = config.clone();
 
                         tokio::spawn(async move {
@@ -38,6 +39,7 @@ pub async fn create_server(
                                 pdu,
                                 &config_clone,
                                 &ran_context_clone,
+                                &ue_context_clone,
                                 addr,
                                 socket_clone,
                             ).await {
@@ -61,6 +63,7 @@ async fn handle_ngap_message(
     pdu: NgapPdu,
     config: &Config,
     ran_context: &RanContextManager,
+    ue_context: &UeContextManager,
     addr: std::net::SocketAddr,
     socket: Arc<UdpSocket>,
 ) -> Result<()> {
@@ -79,8 +82,14 @@ async fn handle_ngap_message(
                     socket.send_to(&encoded, addr).await?;
                     info!("Sent NG Setup response to {}", addr);
                 }
-                NgapMessageValue::InitialUeMessage => {
-                    debug!("Received Initial UE Message");
+                NgapMessageValue::InitialUeMessage(message) => {
+                    handlers::handle_initial_ue_message(
+                        message,
+                        ran_context,
+                        ue_context,
+                        addr,
+                    ).await?;
+                    info!("Processed Initial UE Message from {}", addr);
                 }
                 NgapMessageValue::UplinkNasTransport => {
                     debug!("Received Uplink NAS Transport");

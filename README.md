@@ -4,11 +4,11 @@
 
 ### NGAP (N2 Interface) Protocol
 - NG Setup Request/Response handling with TAI validation
+- Initial UE Message handling
 
 ## NOT IMPLEMENTED FEATURES
 
 ### NGAP (N2 Interface) Protocol
-- Initial UE Message handling
 - Uplink/Downlink NAS Transport
 - Initial Context Setup Response
 - PDU Session Resource Setup Request/Response
