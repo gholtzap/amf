@@ -1,9 +1,13 @@
 # AMF
 
-## NOT IMPLEMENTED FEATURES
+## IMPLEMENTED FEATURES
 
 ### NGAP (N2 Interface) Protocol
 - NG Setup Request/Response handling with TAI validation
+
+## NOT IMPLEMENTED FEATURES
+
+### NGAP (N2 Interface) Protocol
 - Initial UE Message handling
 - Uplink/Downlink NAS Transport
 - Initial Context Setup Response

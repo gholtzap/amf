@@ -63,3 +63,16 @@ pub struct PlmnSupportItem {
     pub plmn_identity: PlmnIdentity,
     pub slice_support_list: Vec<SliceSupportItem>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NgSetupFailure {
+    pub cause: Cause,
+    pub time_to_wait: Option<u8>,
+    pub critical_diagnostics: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cause {
+    pub cause_type: u8,
+    pub cause_value: u8,
+}
