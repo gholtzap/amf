@@ -1,0 +1,13 @@
+/Users/gmh/dev/telco/amf-rust/target/debug/deps/sctp-49c575141e3217f8.d: /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/lib.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sys/mod.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/mod.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/fd.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/socket.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/addr.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/event.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/notification.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sctp.rs
+
+/Users/gmh/dev/telco/amf-rust/target/debug/deps/libsctp-49c575141e3217f8.rmeta: /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/lib.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sys/mod.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/mod.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/fd.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/socket.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/addr.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/event.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/notification.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sctp.rs
+
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/lib.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sys/mod.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/mod.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/fd.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/socket.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/addr.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/event.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/net/notification.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sctp-0.1.5/src/sctp.rs:

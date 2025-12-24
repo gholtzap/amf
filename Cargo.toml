@@ -42,6 +42,8 @@ asn1-rs = "0.6"
 prost = "0.13"
 prost-types = "0.13"
 rasn = "0.15"
+socket2 = { version = "0.5", features = ["all"] }
+libc = "0.2"
 
 [build-dependencies]
 prost-build = "0.13"
