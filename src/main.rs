@@ -54,20 +54,32 @@ async fn main() -> Result<()> {
     info!("Registered with NRF");
 
     info!("Starting SBI server on {}", config.sbi.bind_addr);
-    let sbi_server = sbi::server::create_server(
-        &config.sbi,
-        ue_context.clone(),
-        ran_context.clone(),
-        db.clone(),
-    ).await?;
+    let sbi_config = config.sbi.clone();
+    let sbi_ue_context = ue_context.clone();
+    let sbi_ran_context = ran_context.clone();
+    let sbi_db = db.clone();
+    let sbi_server = tokio::spawn(async move {
+        sbi::server::create_server(
+            &sbi_config,
+            sbi_ue_context,
+            sbi_ran_context,
+            sbi_db,
+        ).await
+    });
 
     info!("Starting NGAP server on {}", config.ngap.bind_addr);
-    let ngap_server = ngap::server::create_server(
-        &config.ngap,
-        ue_context.clone(),
-        ran_context.clone(),
-        db.clone(),
-    );
+    let ngap_config = config.ngap.clone();
+    let ngap_ue_context = ue_context.clone();
+    let ngap_ran_context = ran_context.clone();
+    let ngap_db = db.clone();
+    let ngap_server = tokio::spawn(async move {
+        ngap::server::create_server(
+            &ngap_config,
+            ngap_ue_context,
+            ngap_ran_context,
+            ngap_db,
+        ).await
+    });
 
     tokio::select! {
         result = sbi_server => {

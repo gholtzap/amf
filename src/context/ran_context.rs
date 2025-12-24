@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub struct RanContext {
     pub ran_id: String,
     pub ran_name: String,
-    pub addr: SocketAddr,
+    pub addr: String,
     pub state: RanState,
     pub supported_ta_list: Vec<SupportedTa>,
     pub default_paging_drx: Option<u32>,
@@ -62,7 +62,7 @@ impl RanContextManager {
         let context = RanContext {
             ran_id: ran_id.clone(),
             ran_name: String::new(),
-            addr,
+            addr: addr.to_string(),
             state: RanState::Disconnected,
             supported_ta_list: Vec::new(),
             default_paging_drx: None,
@@ -83,13 +83,17 @@ impl RanContextManager {
     }
 
     pub fn update(&self, context: RanContext) {
-        self.addr_to_ran_id.insert(context.addr, context.ran_id.clone());
+        if let Ok(addr) = context.addr.parse() {
+            self.addr_to_ran_id.insert(addr, context.ran_id.clone());
+        }
         self.contexts.insert(context.ran_id.clone(), context);
     }
 
     pub fn remove(&self, ran_id: &str) -> Option<RanContext> {
         self.contexts.remove(ran_id).map(|(_, context)| {
-            self.addr_to_ran_id.remove(&context.addr);
+            if let Ok(addr) = context.addr.parse() {
+                self.addr_to_ran_id.remove(&addr);
+            }
             context
         })
     }

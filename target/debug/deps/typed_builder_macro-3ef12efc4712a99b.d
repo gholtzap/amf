@@ -1,0 +1,10 @@
+/Users/gmh/dev/telco/amf-rust/target/debug/deps/typed_builder_macro-3ef12efc4712a99b.d: /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/lib.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/builder_attr.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/field_info.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/mutator.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/struct_info.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/util.rs
+
+/Users/gmh/dev/telco/amf-rust/target/debug/deps/libtyped_builder_macro-3ef12efc4712a99b.dylib: /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/lib.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/builder_attr.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/field_info.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/mutator.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/struct_info.rs /Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/util.rs
+
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/lib.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/builder_attr.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/field_info.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/mutator.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/struct_info.rs:
+/Users/gmh/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/typed-builder-macro-0.22.0/src/util.rs:
