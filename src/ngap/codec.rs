@@ -92,6 +92,24 @@ impl NgapPdu {
     }
 }
 
+fn decode_aper_length(data: &[u8]) -> Result<(usize, usize)> {
+    if data.is_empty() {
+        return Err(anyhow!("No data for APER length field"));
+    }
+
+    if data[0] < 0x80 {
+        Ok((data[0] as usize, 1))
+    } else if data[0] < 0xC0 {
+        if data.len() < 2 {
+            return Err(anyhow!("Not enough data for 2-byte APER length"));
+        }
+        let length = (((data[0] & 0x3F) as usize) << 8) | (data[1] as usize);
+        Ok((length, 2))
+    } else {
+        Err(anyhow!("Fragmented APER length not supported"))
+    }
+}
+
 fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
     use tracing::debug;
 
@@ -105,14 +123,24 @@ fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
     debug!("decode_initiating_message: procedure_code={}, criticality={}, data_len={}", procedure_code, criticality, data.len());
     debug!("Initiating message data: {:02x?}", &data[..data.len().min(50)]);
 
+    let (open_type_length, length_bytes) = decode_aper_length(&data[2..])?;
+    let value_start = 2 + length_bytes;
+    debug!("Open type length: {}, length_bytes: {}, value_start: {}", open_type_length, length_bytes, value_start);
+
+    if value_start + open_type_length > data.len() {
+        return Err(anyhow!("Open type length {} exceeds available data {}", open_type_length, data.len() - value_start));
+    }
+
+    let value_data = &data[value_start..value_start + open_type_length];
+
     let value = match procedure_code {
         NGAP_PROCEDURE_CODE_NG_SETUP => {
-            debug!("Decoding NG Setup Request, passing {} bytes to decoder", data.len() - 2);
-            let request = decode_ng_setup_request(&data[2..])?;
+            debug!("Decoding NG Setup Request, passing {} bytes to decoder", value_data.len());
+            let request = decode_ng_setup_request(value_data)?;
             NgapMessageValue::NgSetupRequest(request)
         }
         NGAP_PROCEDURE_CODE_INITIAL_UE_MESSAGE => {
-            let message = decode_initial_ue_message(&data[2..])?;
+            let message = decode_initial_ue_message(value_data)?;
             NgapMessageValue::InitialUeMessage(message)
         }
         NGAP_PROCEDURE_CODE_UPLINK_NAS_TRANSPORT => {
