@@ -252,17 +252,54 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
 }
 
 fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
-    if data.len() < 8 {
+    if data.len() < 2 {
         return Err(anyhow!("Global RAN node ID too short"));
     }
 
-    let plmn = decode_plmn_identity(&data[0..3]);
-    let ran_node_id = format!("{:02x}{:02x}{:02x}{:02x}", data[4], data[5], data[6], data[7]);
+    let mut cursor = 0;
+
+    let choice_tag = data[cursor];
+    cursor += 1;
+
+    let length = data[cursor] as usize;
+    cursor += 1;
+
+    if cursor + length > data.len() {
+        return Err(anyhow!("Global RAN node ID length mismatch"));
+    }
+
+    if length < 3 {
+        return Err(anyhow!("Global RAN node ID payload too short"));
+    }
+
+    let plmn = decode_plmn_identity(&data[cursor..cursor + 3]);
+    cursor += 3;
+
+    let remaining = length - 3;
+    if remaining < 1 {
+        return Err(anyhow!("No gNB ID present"));
+    }
+
+    let gnb_id_type_tag = data[cursor];
+    cursor += 1;
+
+    let gnb_id_length = if cursor < data.len() { data[cursor] as usize } else { 0 };
+    cursor += 1;
+
+    let mut ran_node_id = String::new();
+    if cursor + gnb_id_length <= data.len() {
+        for i in 0..gnb_id_length {
+            ran_node_id.push_str(&format!("{:02x}", data[cursor + i]));
+        }
+        cursor += gnb_id_length;
+    }
+
+    let total_consumed = cursor;
 
     Ok((GlobalRanNodeId {
         plmn_identity: plmn,
         ran_node_id,
-    }, 8))
+    }, total_consumed))
 }
 
 fn decode_plmn_identity(data: &[u8]) -> PlmnIdentity {
