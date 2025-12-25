@@ -491,14 +491,6 @@ fn decode_supported_ta_list(data: &[u8]) -> Result<(Vec<SupportedTaItem>, usize)
         return Ok((list, 0));
     }
 
-    let (open_type_length, length_bytes) = decode_aper_length(data)?;
-    cursor += length_bytes;
-    debug!("Open type length: {}, length_bytes: {}", open_type_length, length_bytes);
-
-    if cursor >= data.len() {
-        return Ok((list, cursor));
-    }
-
     let count = data[cursor] as usize + 1;
     cursor += 1;
     debug!("TA count: {}", count);
