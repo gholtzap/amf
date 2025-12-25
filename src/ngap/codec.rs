@@ -730,22 +730,28 @@ fn decode_ng_setup_failure(data: &[u8]) -> Result<NgSetupFailure> {
 }
 
 fn encode_ng_setup_failure(failure: &NgSetupFailure, buf: &mut BytesMut) -> Result<()> {
-    buf.put_u8(0x00);
-    buf.put_u8(0x00);
-    buf.put_u8(0x01);
+    let mut value_buf = BytesMut::new();
 
-    buf.put_u8(15);
-    buf.put_u8(0x00);
-    buf.put_u8(0x02);
-    buf.put_u8(failure.cause.cause_type);
-    buf.put_u8(failure.cause.cause_value);
+    value_buf.put_u8(0x00);
+
+    let ie_count = if failure.time_to_wait.is_some() { 2u16 } else { 1u16 };
+    value_buf.put_u16(ie_count);
+
+    value_buf.put_u16(15);
+    value_buf.put_u8(0x00);
+    value_buf.put_u8(0x02);
+    value_buf.put_u8(failure.cause.cause_type);
+    value_buf.put_u8(failure.cause.cause_value);
 
     if let Some(ttw) = failure.time_to_wait {
-        buf.put_u8(12);
-        buf.put_u8(0x00);
-        buf.put_u8(0x01);
-        buf.put_u8(ttw);
+        value_buf.put_u16(107);
+        value_buf.put_u8(0x40);
+        value_buf.put_u8(0x01);
+        value_buf.put_u8(ttw);
     }
+
+    encode_aper_length(value_buf.len(), buf);
+    buf.put_slice(&value_buf);
 
     Ok(())
 }
