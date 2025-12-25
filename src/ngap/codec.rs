@@ -221,21 +221,31 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
     debug!("Decoding NG Setup Request, data length: {}", data.len());
     debug!("Raw data: {:02x?}", &data[..data.len().min(100)]);
 
-    while cursor < data.len() {
-        if cursor + 3 > data.len() {
+    if cursor + 1 > data.len() {
+        return Err(anyhow!("NG Setup Request too short for IE count"));
+    }
+
+    let ie_count = data[cursor] as usize;
+    cursor += 1;
+    debug!("Number of IEs: {}", ie_count);
+
+    for i in 0..ie_count {
+        if cursor + 6 > data.len() {
+            warn!("Not enough data for IE {} header", i);
             break;
         }
 
-        let ie_id = data[cursor];
-        let ie_criticality = data[cursor + 1];
-        let ie_length = data[cursor + 2] as usize;
-
-        debug!("IE ID: {}, Criticality: {}, Length: {}, Cursor: {}", ie_id, ie_criticality, ie_length, cursor);
-
+        let ie_id = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        let ie_criticality = data[cursor + 2];
         cursor += 3;
 
+        let (ie_length, length_bytes) = decode_length(&data[cursor..])?;
+        cursor += length_bytes;
+
+        debug!("IE {}: ID={}, Criticality={}, Length={}, Cursor={}", i, ie_id, ie_criticality, ie_length, cursor);
+
         if cursor + ie_length > data.len() {
-            warn!("IE length {} exceeds remaining data at cursor {}", ie_length, cursor);
+            warn!("IE {} length {} exceeds remaining data at cursor {}", i, ie_length, cursor);
             break;
         }
 
@@ -244,8 +254,8 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
                 debug!("Found Global RAN Node ID IE, decoding...");
                 debug!("RAN Node ID data: {:02x?}", &data[cursor..cursor + ie_length.min(20)]);
                 match decode_global_ran_node_id(&data[cursor..cursor + ie_length]) {
-                    Ok((node_id, consumed)) => {
-                        debug!("Successfully decoded Global RAN Node ID, consumed {} bytes", consumed);
+                    Ok((node_id, _consumed)) => {
+                        debug!("Successfully decoded Global RAN Node ID");
                         global_ran_node_id = Some(node_id);
                         cursor += ie_length;
                     }
@@ -259,20 +269,22 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
                 debug!("Found Supported TA List IE");
                 let (ta_list, consumed) = decode_supported_ta_list(&data[cursor..])?;
                 supported_ta_list = ta_list;
-                cursor += consumed;
+                cursor += ie_length;
             }
-            96 => {
+            21 => {
                 debug!("Found Default Paging DRX IE");
-                if cursor + ie_length <= data.len() {
+                if ie_length >= 1 && cursor < data.len() {
                     default_paging_drx = data[cursor] as u32;
-                    cursor += ie_length;
                 }
+                cursor += ie_length;
+            }
+            82 => {
+                debug!("Found RAN Node Name IE (skipping)");
+                cursor += ie_length;
             }
             _ => {
                 debug!("Unknown IE ID: {}, skipping {} bytes", ie_id, ie_length);
-                if cursor + ie_length <= data.len() {
-                    cursor += ie_length;
-                }
+                cursor += ie_length;
             }
         }
     }
@@ -286,6 +298,30 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
         supported_ta_list,
         default_paging_drx,
     })
+}
+
+fn decode_length(data: &[u8]) -> Result<(usize, usize)> {
+    if data.is_empty() {
+        return Err(anyhow!("No data for length field"));
+    }
+
+    if data[0] < 128 {
+        Ok((data[0] as usize, 1))
+    } else {
+        let num_bytes = (data[0] & 0x7F) as usize;
+        if num_bytes == 0 || num_bytes > 4 {
+            return Err(anyhow!("Invalid length encoding: {} bytes", num_bytes));
+        }
+        if data.len() < 1 + num_bytes {
+            return Err(anyhow!("Not enough data for multi-byte length"));
+        }
+
+        let mut length = 0usize;
+        for i in 0..num_bytes {
+            length = (length << 8) | (data[1 + i] as usize);
+        }
+        Ok((length, 1 + num_bytes))
+    }
 }
 
 fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
