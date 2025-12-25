@@ -221,12 +221,16 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
     debug!("Decoding NG Setup Request, data length: {}", data.len());
     debug!("Raw data: {:02x?}", &data[..data.len().min(100)]);
 
-    if cursor + 1 > data.len() {
-        return Err(anyhow!("NG Setup Request too short for IE count"));
+    if cursor + 3 > data.len() {
+        return Err(anyhow!("NG Setup Request too short for header"));
     }
 
-    let ie_count = data[cursor] as usize;
+    let extension_bit = data[cursor];
     cursor += 1;
+    debug!("Extension bit: {}", extension_bit);
+
+    let ie_count = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
     debug!("Number of IEs: {}", ie_count);
 
     for i in 0..ie_count {
@@ -329,61 +333,48 @@ fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
 
     debug!("decode_global_ran_node_id: input data length={}, data={:02x?}", data.len(), &data[..data.len().min(30)]);
 
-    if data.len() < 2 {
-        return Err(anyhow!("Global RAN node ID too short"));
+    if data.len() < 5 {
+        return Err(anyhow!("Global RAN node ID too short: {} bytes", data.len()));
     }
 
     let mut cursor = 0;
 
     let _choice_tag = data[cursor];
     cursor += 1;
+    debug!("Choice tag: {:02x} (0=globalGNB-ID, 1=globalNgENB-ID, 2=globalN3IWF-ID)", _choice_tag);
 
-    let length = data[cursor] as usize;
-    cursor += 1;
-
-    debug!("Choice tag: {:02x}, Length: {}", _choice_tag, length);
-
-    if cursor + length > data.len() {
-        return Err(anyhow!("Global RAN node ID length mismatch: cursor={}, length={}, data.len()={}", cursor, length, data.len()));
-    }
-
-    if length < 3 {
-        return Err(anyhow!("Global RAN node ID payload too short: {}", length));
+    if cursor + 3 > data.len() {
+        return Err(anyhow!("Not enough data for PLMN"));
     }
 
     let plmn = decode_plmn_identity(&data[cursor..cursor + 3]);
     debug!("Decoded PLMN: MCC={}, MNC={}", plmn.mcc, plmn.mnc);
     cursor += 3;
 
-    let remaining = length - 3;
-    if remaining < 1 {
+    if cursor >= data.len() {
         return Err(anyhow!("No gNB ID present"));
     }
 
-    let _gnb_id_type_tag = data[cursor];
+    let _gnb_id_header = data[cursor];
     cursor += 1;
+    debug!("gNB ID header: {:02x}", _gnb_id_header);
 
-    let gnb_id_length = if cursor < data.len() { data[cursor] as usize } else { 0 };
-    cursor += 1;
-
-    debug!("gNB ID type tag: {:02x}, gNB ID length: {}", _gnb_id_type_tag, gnb_id_length);
-
-    let mut ran_node_id = String::new();
-    if cursor + gnb_id_length <= data.len() {
-        for i in 0..gnb_id_length {
-            ran_node_id.push_str(&format!("{:02x}", data[cursor + i]));
-        }
-        cursor += gnb_id_length;
+    let remaining = data.len() - cursor;
+    if remaining == 0 {
+        return Err(anyhow!("No gNB ID value bytes"));
     }
 
-    let total_consumed = cursor;
+    let mut ran_node_id = String::new();
+    for i in 0..remaining {
+        ran_node_id.push_str(&format!("{:02x}", data[cursor + i]));
+    }
 
-    debug!("Decoded RAN Node ID: {}, total consumed: {}", ran_node_id, total_consumed);
+    debug!("Decoded RAN Node ID: {} ({} bytes)", ran_node_id, remaining);
 
     Ok((GlobalRanNodeId {
         plmn_identity: plmn,
         ran_node_id,
-    }, total_consumed))
+    }, data.len()))
 }
 
 fn decode_plmn_identity(data: &[u8]) -> PlmnIdentity {
