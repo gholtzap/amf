@@ -19,9 +19,11 @@ pub async fn handle_ng_setup_request(
     info!("Processing NG Setup Request from {}", addr);
     debug!("Request: {:?}", request);
 
-    let ran_node_id = format!("{}_{}",
-        request.global_ran_node_id.plmn_identity.mcc,
-        request.global_ran_node_id.ran_node_id
+    let plmn = request.global_ran_node_id.plmn_identity();
+    let ran_node_id = format!("{}_{}_{}",
+        plmn.mcc,
+        request.global_ran_node_id.node_type(),
+        request.global_ran_node_id.ran_node_id()
     );
 
     if !validate_supported_tai_list(&request.supported_ta_list, config) {

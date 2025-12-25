@@ -339,9 +339,9 @@ fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
 
     let mut cursor = 0;
 
-    let _choice_tag = data[cursor];
+    let choice_tag = data[cursor];
     cursor += 1;
-    debug!("Choice tag: {:02x} (0=globalGNB-ID, 1=globalNgENB-ID, 2=globalN3IWF-ID)", _choice_tag);
+    debug!("Choice tag: {:02x} (0=globalGNB-ID, 1=globalNgENB-ID, 2=globalN3IWF-ID, 3=globalTNGF-ID, 4=globalTWIF-ID, 5=globalW-AGF-ID)", choice_tag);
 
     if cursor + 3 > data.len() {
         return Err(anyhow!("Not enough data for PLMN"));
@@ -352,29 +352,57 @@ fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
     cursor += 3;
 
     if cursor >= data.len() {
-        return Err(anyhow!("No gNB ID present"));
+        return Err(anyhow!("No RAN node ID present"));
     }
 
-    let _gnb_id_header = data[cursor];
+    let id_header = data[cursor];
     cursor += 1;
-    debug!("gNB ID header: {:02x}", _gnb_id_header);
+    debug!("RAN ID header: {:02x}", id_header);
 
     let remaining = data.len() - cursor;
     if remaining == 0 {
-        return Err(anyhow!("No gNB ID value bytes"));
+        return Err(anyhow!("No RAN node ID value bytes"));
     }
 
-    let mut ran_node_id = String::new();
+    let mut node_id_value = String::new();
     for i in 0..remaining {
-        ran_node_id.push_str(&format!("{:02x}", data[cursor + i]));
+        node_id_value.push_str(&format!("{:02x}", data[cursor + i]));
     }
 
-    debug!("Decoded RAN Node ID: {} ({} bytes)", ran_node_id, remaining);
+    debug!("Decoded RAN Node ID: {} ({} bytes)", node_id_value, remaining);
 
-    Ok((GlobalRanNodeId {
-        plmn_identity: plmn,
-        ran_node_id,
-    }, data.len()))
+    let global_ran_node_id = match choice_tag {
+        0 => GlobalRanNodeId::GNB(GlobalGnbId {
+            plmn_identity: plmn,
+            gnb_id: GnbId::GnbId {
+                value: node_id_value,
+                bit_length: (remaining * 8) as u8,
+            },
+        }),
+        1 => GlobalRanNodeId::NgENB(GlobalNgEnbId {
+            plmn_identity: plmn,
+            ng_enb_id: NgEnbId::MacroNgEnbId(node_id_value),
+        }),
+        2 => GlobalRanNodeId::N3IWF(GlobalN3iwfId {
+            plmn_identity: plmn,
+            n3iwf_id: node_id_value,
+        }),
+        3 => GlobalRanNodeId::TNGF(GlobalTngfId {
+            plmn_identity: plmn,
+            tngf_id: node_id_value,
+        }),
+        4 => GlobalRanNodeId::TWIF(GlobalTwifId {
+            plmn_identity: plmn,
+            twif_id: node_id_value,
+        }),
+        5 => GlobalRanNodeId::WAGF(GlobalWagfId {
+            plmn_identity: plmn,
+            wagf_id: node_id_value,
+        }),
+        _ => return Err(anyhow!("Unknown RAN node type: {}", choice_tag)),
+    };
+
+    Ok((global_ran_node_id, data.len()))
 }
 
 fn decode_plmn_identity(data: &[u8]) -> PlmnIdentity {

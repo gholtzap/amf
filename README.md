@@ -5,6 +5,7 @@
 ### NGAP (N2 Interface) Protocol
 - NG Setup Request/Response handling with TAI validation
 - Initial UE Message handling
+- Global RAN Node ID per 3GPP TS 38.413 (gNB, ng-eNB, N3IWF, TNGF, TWIF, W-AGF)
 
 ## NOT IMPLEMENTED FEATURES
 
