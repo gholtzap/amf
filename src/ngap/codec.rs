@@ -383,10 +383,20 @@ fn decode_plmn_identity(data: &[u8]) -> PlmnIdentity {
         (data[0] >> 4) & 0x0F,
         data[1] & 0x0F
     );
-    let mnc = format!("{}{}",
-        (data[1] >> 4) & 0x0F,
-        data[2] & 0x0F
-    );
+
+    let mnc_digit3 = (data[1] >> 4) & 0x0F;
+    let mnc = if mnc_digit3 == 0x0F {
+        format!("{}{}",
+            data[2] & 0x0F,
+            (data[2] >> 4) & 0x0F
+        )
+    } else {
+        format!("{}{}{}",
+            data[2] & 0x0F,
+            (data[2] >> 4) & 0x0F,
+            mnc_digit3
+        )
+    };
 
     PlmnIdentity { mcc, mnc }
 }
