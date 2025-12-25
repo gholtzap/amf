@@ -85,6 +85,7 @@ async fn handle_sctp_association(
             }
             Ok(len) => {
                 debug!("Received {} bytes from {}", len, addr);
+                info!("Raw NGAP PDU hex dump: {}", hex::encode(&buf[..len]));
 
                 match NgapPdu::decode(&buf[..len]) {
                     Ok(pdu) => {
