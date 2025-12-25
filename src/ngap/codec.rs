@@ -93,6 +93,8 @@ impl NgapPdu {
 }
 
 fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
+    use tracing::debug;
+
     if data.len() < 2 {
         return Err(anyhow!("Initiating message too short"));
     }
@@ -100,8 +102,12 @@ fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
     let procedure_code = data[0];
     let criticality = (data[1] >> 6) & 0x03;
 
+    debug!("decode_initiating_message: procedure_code={}, criticality={}, data_len={}", procedure_code, criticality, data.len());
+    debug!("Initiating message data: {:02x?}", &data[..data.len().min(50)]);
+
     let value = match procedure_code {
         NGAP_PROCEDURE_CODE_NG_SETUP => {
+            debug!("Decoding NG Setup Request, passing {} bytes to decoder", data.len() - 2);
             let request = decode_ng_setup_request(&data[2..])?;
             NgapMessageValue::NgSetupRequest(request)
         }
@@ -205,10 +211,15 @@ fn encode_unsuccessful_outcome(msg: &UnsuccessfulOutcome, buf: &mut BytesMut) ->
 }
 
 fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
+    use tracing::{debug, warn};
+
     let mut cursor = 0;
     let mut global_ran_node_id = None;
     let mut supported_ta_list = Vec::new();
     let mut default_paging_drx = 32;
+
+    debug!("Decoding NG Setup Request, data length: {}", data.len());
+    debug!("Raw data: {:02x?}", &data[..data.len().min(100)]);
 
     while cursor < data.len() {
         if cursor + 3 > data.len() {
@@ -216,32 +227,58 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
         }
 
         let ie_id = data[cursor];
+        let ie_criticality = data[cursor + 1];
         let ie_length = data[cursor + 2] as usize;
+
+        debug!("IE ID: {}, Criticality: {}, Length: {}, Cursor: {}", ie_id, ie_criticality, ie_length, cursor);
+
         cursor += 3;
+
+        if cursor + ie_length > data.len() {
+            warn!("IE length {} exceeds remaining data at cursor {}", ie_length, cursor);
+            break;
+        }
 
         match ie_id {
             27 => {
-                let (node_id, consumed) = decode_global_ran_node_id(&data[cursor..])?;
-                global_ran_node_id = Some(node_id);
-                cursor += consumed;
+                debug!("Found Global RAN Node ID IE, decoding...");
+                debug!("RAN Node ID data: {:02x?}", &data[cursor..cursor + ie_length.min(20)]);
+                match decode_global_ran_node_id(&data[cursor..cursor + ie_length]) {
+                    Ok((node_id, consumed)) => {
+                        debug!("Successfully decoded Global RAN Node ID, consumed {} bytes", consumed);
+                        global_ran_node_id = Some(node_id);
+                        cursor += ie_length;
+                    }
+                    Err(e) => {
+                        warn!("Failed to decode Global RAN Node ID: {}", e);
+                        cursor += ie_length;
+                    }
+                }
             }
             102 => {
+                debug!("Found Supported TA List IE");
                 let (ta_list, consumed) = decode_supported_ta_list(&data[cursor..])?;
                 supported_ta_list = ta_list;
                 cursor += consumed;
             }
             96 => {
+                debug!("Found Default Paging DRX IE");
                 if cursor + ie_length <= data.len() {
                     default_paging_drx = data[cursor] as u32;
                     cursor += ie_length;
                 }
             }
             _ => {
+                debug!("Unknown IE ID: {}, skipping {} bytes", ie_id, ie_length);
                 if cursor + ie_length <= data.len() {
                     cursor += ie_length;
                 }
             }
         }
+    }
+
+    if global_ran_node_id.is_none() {
+        warn!("No Global RAN Node ID found in NG Setup Request");
     }
 
     Ok(NgSetupRequest {
@@ -252,27 +289,34 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
 }
 
 fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
+    use tracing::debug;
+
+    debug!("decode_global_ran_node_id: input data length={}, data={:02x?}", data.len(), &data[..data.len().min(30)]);
+
     if data.len() < 2 {
         return Err(anyhow!("Global RAN node ID too short"));
     }
 
     let mut cursor = 0;
 
-    let choice_tag = data[cursor];
+    let _choice_tag = data[cursor];
     cursor += 1;
 
     let length = data[cursor] as usize;
     cursor += 1;
 
+    debug!("Choice tag: {:02x}, Length: {}", _choice_tag, length);
+
     if cursor + length > data.len() {
-        return Err(anyhow!("Global RAN node ID length mismatch"));
+        return Err(anyhow!("Global RAN node ID length mismatch: cursor={}, length={}, data.len()={}", cursor, length, data.len()));
     }
 
     if length < 3 {
-        return Err(anyhow!("Global RAN node ID payload too short"));
+        return Err(anyhow!("Global RAN node ID payload too short: {}", length));
     }
 
     let plmn = decode_plmn_identity(&data[cursor..cursor + 3]);
+    debug!("Decoded PLMN: MCC={}, MNC={}", plmn.mcc, plmn.mnc);
     cursor += 3;
 
     let remaining = length - 3;
@@ -280,11 +324,13 @@ fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
         return Err(anyhow!("No gNB ID present"));
     }
 
-    let gnb_id_type_tag = data[cursor];
+    let _gnb_id_type_tag = data[cursor];
     cursor += 1;
 
     let gnb_id_length = if cursor < data.len() { data[cursor] as usize } else { 0 };
     cursor += 1;
+
+    debug!("gNB ID type tag: {:02x}, gNB ID length: {}", _gnb_id_type_tag, gnb_id_length);
 
     let mut ran_node_id = String::new();
     if cursor + gnb_id_length <= data.len() {
@@ -295,6 +341,8 @@ fn decode_global_ran_node_id(data: &[u8]) -> Result<(GlobalRanNodeId, usize)> {
     }
 
     let total_consumed = cursor;
+
+    debug!("Decoded RAN Node ID: {}, total consumed: {}", ran_node_id, total_consumed);
 
     Ok((GlobalRanNodeId {
         plmn_identity: plmn,
