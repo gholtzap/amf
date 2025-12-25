@@ -112,20 +112,37 @@ pub async fn handle_ng_setup_request(
     }))
 }
 
+fn normalize_tac(tac: &str) -> String {
+    tac.trim_start_matches('0').to_lowercase()
+}
+
 fn validate_supported_tai_list(tai_list: &[SupportedTaItem], config: &Config) -> bool {
     if tai_list.is_empty() {
+        warn!("Received empty TAI list");
         return false;
     }
 
     for ta in tai_list {
+        debug!("Validating TA with TAC: {}", ta.tac);
         let mut found = false;
 
         for plmn_support in &config.amf.plmn_support_list {
             for configured_tai in &plmn_support.tai_list {
                 for broadcast_plmn in &ta.broadcast_plmn_list {
-                    if configured_tai.tac == ta.tac &&
+                    let config_tac_normalized = normalize_tac(&configured_tai.tac);
+                    let received_tac_normalized = normalize_tac(&ta.tac);
+
+                    debug!("Comparing TAC: received='{}' (normalized='{}') vs config='{}' (normalized='{}')",
+                           ta.tac, received_tac_normalized, configured_tai.tac, config_tac_normalized);
+                    debug!("Comparing PLMN: received='{}/{}' vs config='{}/{}'",
+                           broadcast_plmn.plmn_identity.mcc, broadcast_plmn.plmn_identity.mnc,
+                           configured_tai.plmn_id.mcc, configured_tai.plmn_id.mnc);
+
+                    if config_tac_normalized == received_tac_normalized &&
                        configured_tai.plmn_id.mcc == broadcast_plmn.plmn_identity.mcc &&
                        configured_tai.plmn_id.mnc == broadcast_plmn.plmn_identity.mnc {
+                        info!("TAI validation succeeded for TAC {} PLMN {}/{}",
+                              ta.tac, broadcast_plmn.plmn_identity.mcc, broadcast_plmn.plmn_identity.mnc);
                         found = true;
                         break;
                     }
@@ -140,6 +157,7 @@ fn validate_supported_tai_list(tai_list: &[SupportedTaItem], config: &Config) ->
         }
 
         if !found {
+            warn!("TAI validation failed for TAC {} - no matching configured TAI found", ta.tac);
             return false;
         }
     }

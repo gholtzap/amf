@@ -262,7 +262,7 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
     debug!("Number of IEs: {}", ie_count);
 
     for i in 0..ie_count {
-        if cursor + 6 > data.len() {
+        if cursor + 3 > data.len() {
             warn!("Not enough data for IE {} header", i);
             break;
         }
@@ -270,6 +270,11 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
         let ie_id = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
         let ie_criticality = data[cursor + 2];
         cursor += 3;
+
+        if cursor >= data.len() {
+            warn!("No length field for IE {} (ID={})", i, ie_id);
+            break;
+        }
 
         let (ie_length, length_bytes) = decode_length(&data[cursor..])?;
         cursor += length_bytes;
@@ -469,47 +474,89 @@ fn encode_plmn_identity(plmn: &PlmnIdentity, buf: &mut BytesMut) {
 }
 
 fn decode_supported_ta_list(data: &[u8]) -> Result<(Vec<SupportedTaItem>, usize)> {
+    use tracing::debug;
+
     let mut list = Vec::new();
     let mut cursor = 0;
 
-    if cursor + 1 > data.len() {
+    debug!("decode_supported_ta_list: input data length={}, data={:02x?}", data.len(), &data[..data.len().min(20)]);
+
+    if data.len() < 5 {
         return Ok((list, 0));
     }
 
-    let count = data[cursor] as usize;
-    cursor += 1;
+    let (open_type_length, length_bytes) = decode_aper_length(data)?;
+    cursor += length_bytes;
+    debug!("Open type length: {}, length_bytes: {}", open_type_length, length_bytes);
 
-    for _ in 0..count {
-        if cursor + 6 > data.len() {
+    if cursor >= data.len() {
+        return Ok((list, cursor));
+    }
+
+    let count = data[cursor] as usize + 1;
+    cursor += 1;
+    debug!("TA count: {}", count);
+
+    for ta_idx in 0..count {
+        if cursor >= data.len() {
+            break;
+        }
+
+        let extension_bit = data[cursor];
+        cursor += 1;
+        debug!("TA item {} extension bit: {:02x}", ta_idx, extension_bit);
+
+        if cursor + 3 > data.len() {
             break;
         }
 
         let tac = format!("{:02x}{:02x}{:02x}", data[cursor], data[cursor+1], data[cursor+2]);
         cursor += 3;
+        debug!("TAC: {}", tac);
 
-        let plmn_count = data[cursor] as usize;
+        if cursor >= data.len() {
+            break;
+        }
+
+        let plmn_count = data[cursor] as usize + 1;
         cursor += 1;
+        debug!("PLMN count: {}", plmn_count);
 
         let mut broadcast_plmn_list = Vec::new();
-        for _ in 0..plmn_count {
+        for plmn_idx in 0..plmn_count {
             if cursor + 3 > data.len() {
                 break;
             }
 
             let plmn = decode_plmn_identity(&data[cursor..cursor+3]);
             cursor += 3;
+            debug!("Decoded PLMN {}: MCC={}, MNC={}", plmn_idx, plmn.mcc, plmn.mnc);
 
-            let slice_count = if cursor < data.len() { data[cursor] as usize } else { 0 };
+            if cursor >= data.len() {
+                break;
+            }
+
+            let slice_count = data[cursor] as usize + 1;
             cursor += 1;
+            debug!("Slice count: {}", slice_count);
 
             let mut tai_slice_support_list = Vec::new();
-            for _ in 0..slice_count {
-                if cursor + 1 > data.len() {
+            for slice_idx in 0..slice_count {
+                if cursor >= data.len() {
+                    break;
+                }
+
+                let slice_extension_bit = data[cursor];
+                cursor += 1;
+                debug!("Slice {} extension bit: {:02x}", slice_idx, slice_extension_bit);
+
+                if cursor >= data.len() {
                     break;
                 }
 
                 let sst = data[cursor];
                 cursor += 1;
+                debug!("SST: {}", sst);
 
                 tai_slice_support_list.push(SliceSupportItem {
                     s_nssai: SNssai {
@@ -535,43 +582,110 @@ fn decode_supported_ta_list(data: &[u8]) -> Result<(Vec<SupportedTaItem>, usize)
 }
 
 fn encode_ng_setup_response(response: &NgSetupResponse, buf: &mut BytesMut) -> Result<()> {
-    buf.put_u8(0x00);
-    buf.put_u8(0x00);
-    buf.put_u8(0x04);
+    use tracing::debug;
 
-    buf.put_u8(1);
-    buf.put_u8(0x00);
-    let name_len = response.amf_name.len().min(150);
-    buf.put_u8(name_len as u8);
-    buf.put_slice(response.amf_name.as_bytes());
+    let mut value_buf = BytesMut::new();
 
-    buf.put_u8(96);
-    buf.put_u8(0x00);
-    buf.put_u8(response.served_guami_list.len() as u8);
-    for guami in &response.served_guami_list {
-        encode_plmn_identity(&guami.plmn_identity, buf);
-        buf.put_slice(guami.amf_region_id.as_bytes());
-        buf.put_slice(guami.amf_set_id.as_bytes());
-        buf.put_slice(guami.amf_pointer.as_bytes());
-    }
+    value_buf.put_u8(0x00);
 
-    buf.put_u8(80);
+    let ie_count = 4u16;
+    value_buf.put_u16(ie_count);
+
+    let ie_data = encode_ng_setup_response_ies(response)?;
+    value_buf.put_slice(&ie_data);
+
+    debug!("NG Setup Response value length: {}", value_buf.len());
+
+    encode_aper_length(value_buf.len(), buf);
+    buf.put_slice(&value_buf);
+
+    Ok(())
+}
+
+fn encode_ng_setup_response_ies(response: &NgSetupResponse) -> Result<Bytes> {
+    let mut buf = BytesMut::new();
+
+    buf.put_u16(1);
     buf.put_u8(0x00);
-    buf.put_u8(0x01);
+    let name_bytes = response.amf_name.as_bytes();
+    encode_aper_length(name_bytes.len(), &mut buf);
+    buf.put_slice(name_bytes);
+
+    buf.put_u16(96);
+    buf.put_u8(0x00);
+    let guami_data = encode_served_guami_list(&response.served_guami_list)?;
+    encode_aper_length(guami_data.len(), &mut buf);
+    buf.put_slice(&guami_data);
+
+    buf.put_u16(80);
+    buf.put_u8(0x00);
+    encode_aper_length(1, &mut buf);
     buf.put_u8(response.relative_amf_capacity);
 
-    buf.put_u8(86);
+    buf.put_u16(86);
     buf.put_u8(0x00);
-    buf.put_u8(response.plmn_support_list.len() as u8);
-    for plmn_support in &response.plmn_support_list {
-        encode_plmn_identity(&plmn_support.plmn_identity, buf);
-        buf.put_u8(plmn_support.slice_support_list.len() as u8);
+    let plmn_data = encode_plmn_support_list(&response.plmn_support_list)?;
+    encode_aper_length(plmn_data.len(), &mut buf);
+    buf.put_slice(&plmn_data);
+
+    Ok(buf.freeze())
+}
+
+fn encode_served_guami_list(guami_list: &[ServedGuami]) -> Result<Bytes> {
+    let mut buf = BytesMut::new();
+
+    buf.put_u8((guami_list.len() - 1) as u8);
+
+    for guami in guami_list {
+        buf.put_u8(0x00);
+        encode_plmn_identity(&guami.plmn_identity, &mut buf);
+
+        let region_id_bytes = hex::decode(&guami.amf_region_id)
+            .unwrap_or_else(|_| vec![0]);
+        buf.put_u8(region_id_bytes[0]);
+
+        let set_id_val = u16::from_str_radix(&guami.amf_set_id, 16)
+            .unwrap_or(0);
+        buf.put_u16(set_id_val << 6);
+
+        let pointer_val = u8::from_str_radix(&guami.amf_pointer, 16)
+            .unwrap_or(0);
+        buf.put_u8(pointer_val << 2);
+    }
+
+    Ok(buf.freeze())
+}
+
+fn encode_plmn_support_list(plmn_list: &[PlmnSupportItem]) -> Result<Bytes> {
+    let mut buf = BytesMut::new();
+
+    buf.put_u8((plmn_list.len() - 1) as u8);
+
+    for plmn_support in plmn_list {
+        buf.put_u8(0x00);
+        encode_plmn_identity(&plmn_support.plmn_identity, &mut buf);
+
+        buf.put_u8((plmn_support.slice_support_list.len() - 1) as u8);
         for slice in &plmn_support.slice_support_list {
+            buf.put_u8(0x00);
             buf.put_u8(slice.s_nssai.sst);
         }
     }
 
-    Ok(())
+    Ok(buf.freeze())
+}
+
+fn encode_aper_length(length: usize, buf: &mut BytesMut) {
+    if length < 128 {
+        buf.put_u8(length as u8);
+    } else if length < 16384 {
+        buf.put_u8(0x80 | ((length >> 8) as u8));
+        buf.put_u8((length & 0xFF) as u8);
+    } else {
+        buf.put_u8(0xC0);
+        buf.put_u8((length >> 8) as u8);
+        buf.put_u8((length & 0xFF) as u8);
+    }
 }
 
 fn decode_ng_setup_failure(data: &[u8]) -> Result<NgSetupFailure> {
