@@ -468,8 +468,14 @@ fn encode_plmn_identity(plmn: &PlmnIdentity, buf: &mut BytesMut) {
 
     if mcc_bytes.len() >= 3 && mnc_bytes.len() >= 2 {
         buf.put_u8((mcc_bytes[1] << 4) | mcc_bytes[0]);
-        buf.put_u8((mnc_bytes[0] << 4) | mcc_bytes[2]);
-        buf.put_u8(mnc_bytes[1]);
+
+        if mnc_bytes.len() == 2 {
+            buf.put_u8(0xF0 | mcc_bytes[2]);
+            buf.put_u8((mnc_bytes[1] << 4) | mnc_bytes[0]);
+        } else {
+            buf.put_u8((mnc_bytes[2] << 4) | mcc_bytes[2]);
+            buf.put_u8((mnc_bytes[1] << 4) | mnc_bytes[0]);
+        }
     }
 }
 
