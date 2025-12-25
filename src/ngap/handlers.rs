@@ -113,7 +113,12 @@ pub async fn handle_ng_setup_request(
 }
 
 fn normalize_tac(tac: &str) -> String {
-    tac.trim_start_matches('0').to_lowercase()
+    let trimmed = tac.trim_start_matches('0');
+    if trimmed.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed.to_lowercase()
+    }
 }
 
 fn validate_supported_tai_list(tai_list: &[SupportedTaItem], config: &Config) -> bool {
