@@ -637,12 +637,8 @@ fn encode_ng_setup_response(response: &NgSetupResponse, buf: &mut BytesMut) -> R
     debug!("Extension bit: 0x00");
 
     let ie_count = 4usize;
-    if ie_count < 128 {
-        value_buf.put_u8((ie_count - 1) as u8);
-        debug!("IE count: {} encoded as single byte: 0x{:02x}", ie_count, (ie_count - 1) as u8);
-    } else {
-        encode_aper_length(ie_count - 1, &mut value_buf);
-    }
+    value_buf.put_u16(ie_count as u16);
+    debug!("IE count: {} encoded as 16-bit big-endian: 0x{:04x}", ie_count, ie_count);
 
     let ie_data = encode_ng_setup_response_ies(response)?;
     debug!("IE data length: {}, hex: {}", ie_data.len(), hex::encode(&ie_data));
@@ -835,16 +831,15 @@ fn decode_ng_setup_failure(data: &[u8]) -> Result<NgSetupFailure> {
 }
 
 fn encode_ng_setup_failure(failure: &NgSetupFailure, buf: &mut BytesMut) -> Result<()> {
+    use tracing::debug;
+
     let mut value_buf = BytesMut::new();
 
     value_buf.put_u8(0x00);
 
     let ie_count = if failure.time_to_wait.is_some() { 2usize } else { 1usize };
-    if ie_count < 128 {
-        value_buf.put_u8((ie_count - 1) as u8);
-    } else {
-        encode_aper_length(ie_count - 1, &mut value_buf);
-    }
+    value_buf.put_u16(ie_count as u16);
+    debug!("NG Setup Failure IE count: {} encoded as 16-bit big-endian", ie_count);
 
     value_buf.put_u16(15);
     value_buf.put_u8(0x00);
