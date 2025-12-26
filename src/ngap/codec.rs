@@ -71,23 +71,28 @@ impl NgapPdu {
     }
 
     pub fn encode(&self) -> Result<Bytes> {
+        use tracing::info;
         let mut buf = BytesMut::new();
 
         match self {
             NgapPdu::InitiatingMessage(msg) => {
                 buf.put_u8(0x00);
+                info!("Encoding InitiatingMessage, PDU type byte: 0x00");
                 encode_initiating_message(msg, &mut buf)?;
             }
             NgapPdu::SuccessfulOutcome(msg) => {
                 buf.put_u8(0x20);
+                info!("Encoding SuccessfulOutcome, PDU type byte: 0x20");
                 encode_successful_outcome(msg, &mut buf)?;
             }
             NgapPdu::UnsuccessfulOutcome(msg) => {
                 buf.put_u8(0x40);
+                info!("Encoding UnsuccessfulOutcome, PDU type byte: 0x40");
                 encode_unsuccessful_outcome(msg, &mut buf)?;
             }
         }
 
+        info!("Final NgapPdu encoded length: {} bytes", buf.len());
         Ok(buf.freeze())
     }
 }
@@ -161,8 +166,12 @@ fn decode_initiating_message(data: &[u8]) -> Result<InitiatingMessage> {
 }
 
 fn encode_successful_outcome(msg: &SuccessfulOutcome, buf: &mut BytesMut) -> Result<()> {
+    use tracing::info;
+
+    info!("Encoding SuccessfulOutcome: procedure_code={}, criticality={}", msg.procedure_code, msg.criticality);
     buf.put_u8(msg.procedure_code);
     buf.put_u8(msg.criticality << 6);
+    info!("Procedure code byte: 0x{:02x}, Criticality byte: 0x{:02x}", msg.procedure_code, msg.criticality << 6);
 
     match &msg.value {
         NgapMessageValue::NgSetupResponse(response) => {
@@ -620,56 +629,74 @@ fn decode_supported_ta_list(data: &[u8]) -> Result<(Vec<SupportedTaItem>, usize)
 }
 
 fn encode_ng_setup_response(response: &NgSetupResponse, buf: &mut BytesMut) -> Result<()> {
-    use tracing::debug;
+    use tracing::{debug, info};
 
     let mut value_buf = BytesMut::new();
 
     value_buf.put_u8(0x00);
+    debug!("Extension bit: 0x00");
 
     let ie_count = 4usize;
     if ie_count < 128 {
         value_buf.put_u8((ie_count - 1) as u8);
+        debug!("IE count: {} encoded as single byte: 0x{:02x}", ie_count, (ie_count - 1) as u8);
     } else {
         encode_aper_length(ie_count - 1, &mut value_buf);
     }
 
     let ie_data = encode_ng_setup_response_ies(response)?;
+    debug!("IE data length: {}, hex: {}", ie_data.len(), hex::encode(&ie_data));
     value_buf.put_slice(&ie_data);
 
-    debug!("NG Setup Response value length: {}", value_buf.len());
+    debug!("NG Setup Response value_buf length: {}", value_buf.len());
+    info!("NG Setup Response value_buf hex: {}", hex::encode(&value_buf));
 
     encode_aper_length(value_buf.len(), buf);
     buf.put_slice(&value_buf);
+
+    info!("Final encoded response buffer hex: {}", hex::encode(&buf));
 
     Ok(())
 }
 
 fn encode_ng_setup_response_ies(response: &NgSetupResponse) -> Result<Bytes> {
+    use tracing::{debug, info};
     let mut buf = BytesMut::new();
 
+    info!("Encoding IE 1 - AMFName: '{}'", response.amf_name);
     buf.put_u16(1);
     buf.put_u8(0x00);
     let name_bytes = response.amf_name.as_bytes();
     encode_aper_length(name_bytes.len(), &mut buf);
     buf.put_slice(name_bytes);
+    debug!("IE 1 encoded, total buf len: {}", buf.len());
 
+    info!("Encoding IE 96 - ServedGUAMIList ({} items)", response.served_guami_list.len());
     buf.put_u16(96);
     buf.put_u8(0x00);
     let guami_data = encode_served_guami_list(&response.served_guami_list)?;
+    debug!("GUAMI data: {}", hex::encode(&guami_data));
     encode_aper_length(guami_data.len(), &mut buf);
     buf.put_slice(&guami_data);
+    debug!("IE 96 encoded, total buf len: {}", buf.len());
 
+    info!("Encoding IE 80 - RelativeAMFCapacity: {}", response.relative_amf_capacity);
     buf.put_u16(80);
     buf.put_u8(0x00);
     encode_aper_length(1, &mut buf);
     buf.put_u8(response.relative_amf_capacity);
+    debug!("IE 80 encoded, total buf len: {}", buf.len());
 
+    info!("Encoding IE 86 - PLMNSupportList ({} items)", response.plmn_support_list.len());
     buf.put_u16(86);
     buf.put_u8(0x00);
     let plmn_data = encode_plmn_support_list(&response.plmn_support_list)?;
+    debug!("PLMN data: {}", hex::encode(&plmn_data));
     encode_aper_length(plmn_data.len(), &mut buf);
     buf.put_slice(&plmn_data);
+    debug!("IE 86 encoded, total buf len: {}", buf.len());
 
+    info!("All IEs encoded, final length: {}", buf.len());
     Ok(buf.freeze())
 }
 

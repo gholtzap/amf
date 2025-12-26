@@ -140,6 +140,7 @@ async fn handle_ngap_message(
                     ).await?;
 
                     let encoded = response_pdu.encode()?;
+                    info!("NG Setup Response encoded bytes ({}): {}", encoded.len(), hex::encode(&encoded));
                     stream.write_all(&encoded).await?;
                     info!("Sent NG Setup response to {}", addr);
                 }
