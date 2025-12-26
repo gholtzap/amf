@@ -173,12 +173,18 @@ fn encode_successful_outcome(msg: &SuccessfulOutcome, buf: &mut BytesMut) -> Res
     buf.put_u8(msg.criticality << 6);
     info!("Procedure code byte: 0x{:02x}, Criticality byte: 0x{:02x}", msg.procedure_code, msg.criticality << 6);
 
+    let mut value_buf = BytesMut::new();
     match &msg.value {
         NgapMessageValue::NgSetupResponse(response) => {
-            encode_ng_setup_response(response, buf)?;
+            encode_ng_setup_response(response, &mut value_buf)?;
         }
         _ => return Err(anyhow!("Unsupported successful outcome message")),
     }
+
+    info!("Encoded value length: {} bytes, adding APER length determinant", value_buf.len());
+    encode_aper_length(value_buf.len(), buf);
+    buf.put_slice(&value_buf);
+    info!("SuccessfulOutcome complete with APER length determinant");
 
     Ok(())
 }
@@ -238,15 +244,23 @@ fn encode_initiating_message(_msg: &InitiatingMessage, _buf: &mut BytesMut) -> R
 }
 
 fn encode_unsuccessful_outcome(msg: &UnsuccessfulOutcome, buf: &mut BytesMut) -> Result<()> {
+    use tracing::info;
+
     buf.put_u8(msg.procedure_code);
     buf.put_u8(msg.criticality << 6);
+    info!("UnsuccessfulOutcome: procedure_code=0x{:02x}, criticality=0x{:02x}", msg.procedure_code, msg.criticality << 6);
 
+    let mut value_buf = BytesMut::new();
     match &msg.value {
         NgapMessageValue::NgSetupFailure(failure) => {
-            encode_ng_setup_failure(failure, buf)?;
+            encode_ng_setup_failure(failure, &mut value_buf)?;
         }
         _ => return Err(anyhow!("Unsupported unsuccessful outcome message")),
     }
+
+    info!("Encoded value length: {} bytes, adding APER length determinant", value_buf.len());
+    encode_aper_length(value_buf.len(), buf);
+    buf.put_slice(&value_buf);
 
     Ok(())
 }
@@ -660,39 +674,62 @@ fn encode_ng_setup_response_ies(response: &NgSetupResponse) -> Result<Bytes> {
     let mut buf = BytesMut::new();
 
     info!("Encoding IE 1 - AMFName: '{}'", response.amf_name);
+    let ie1_start = buf.len();
     buf.put_u16(1);
+    debug!("  IE ID: 0x0001 (2 bytes)");
     buf.put_u8(0x00);
+    debug!("  Criticality byte: 0x00");
     let name_bytes = response.amf_name.as_bytes();
+    let len_start = buf.len();
     encode_aper_length(name_bytes.len(), &mut buf);
+    debug!("  Length: {} bytes, encoded as: {:02x?}", name_bytes.len(), &buf[len_start..]);
     buf.put_slice(name_bytes);
-    debug!("IE 1 encoded, total buf len: {}", buf.len());
+    debug!("  Value: {:02x?}", name_bytes);
+    debug!("IE 1 complete: {:02x?}", &buf[ie1_start..]);
 
     info!("Encoding IE 96 - ServedGUAMIList ({} items)", response.served_guami_list.len());
+    let ie96_start = buf.len();
     buf.put_u16(96);
+    debug!("  IE ID: 0x0060 (2 bytes)");
     buf.put_u8(0x00);
+    debug!("  Criticality byte: 0x00");
     let guami_data = encode_served_guami_list(&response.served_guami_list)?;
-    debug!("GUAMI data: {}", hex::encode(&guami_data));
+    debug!("  GUAMI data: {}", hex::encode(&guami_data));
+    let len_start = buf.len();
     encode_aper_length(guami_data.len(), &mut buf);
+    debug!("  Length: {} bytes, encoded as: {:02x?}", guami_data.len(), &buf[len_start..]);
     buf.put_slice(&guami_data);
-    debug!("IE 96 encoded, total buf len: {}", buf.len());
+    debug!("IE 96 complete: {:02x?}", &buf[ie96_start..]);
 
     info!("Encoding IE 80 - RelativeAMFCapacity: {}", response.relative_amf_capacity);
+    let ie80_start = buf.len();
     buf.put_u16(80);
+    debug!("  IE ID: 0x0050 (2 bytes)");
     buf.put_u8(0x00);
+    debug!("  Criticality byte: 0x00");
+    let len_start = buf.len();
     encode_aper_length(1, &mut buf);
+    debug!("  Length: 1 byte, encoded as: {:02x?}", &buf[len_start..]);
     buf.put_u8(response.relative_amf_capacity);
-    debug!("IE 80 encoded, total buf len: {}", buf.len());
+    debug!("  Value: 0x{:02x}", response.relative_amf_capacity);
+    debug!("IE 80 complete: {:02x?}", &buf[ie80_start..]);
 
     info!("Encoding IE 86 - PLMNSupportList ({} items)", response.plmn_support_list.len());
+    let ie86_start = buf.len();
     buf.put_u16(86);
+    debug!("  IE ID: 0x0056 (2 bytes)");
     buf.put_u8(0x00);
+    debug!("  Criticality byte: 0x00");
     let plmn_data = encode_plmn_support_list(&response.plmn_support_list)?;
-    debug!("PLMN data: {}", hex::encode(&plmn_data));
+    debug!("  PLMN data: {}", hex::encode(&plmn_data));
+    let len_start = buf.len();
     encode_aper_length(plmn_data.len(), &mut buf);
+    debug!("  Length: {} bytes, encoded as: {:02x?}", plmn_data.len(), &buf[len_start..]);
     buf.put_slice(&plmn_data);
-    debug!("IE 86 encoded, total buf len: {}", buf.len());
+    debug!("IE 86 complete: {:02x?}", &buf[ie86_start..]);
 
     info!("All IEs encoded, final length: {}", buf.len());
+    debug!("Complete IE buffer: {:02x?}", &buf[..]);
     Ok(buf.freeze())
 }
 
