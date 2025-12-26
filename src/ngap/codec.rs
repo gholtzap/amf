@@ -257,8 +257,9 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
     cursor += 1;
     debug!("Extension bit: {}", extension_bit);
 
-    let ie_count = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
-    cursor += 2;
+    let (decoded_count, count_bytes) = decode_aper_length(&data[cursor..])?;
+    let ie_count = decoded_count + 1;
+    cursor += count_bytes;
     debug!("Number of IEs: {}", ie_count);
 
     for i in 0..ie_count {
@@ -586,8 +587,12 @@ fn encode_ng_setup_response(response: &NgSetupResponse, buf: &mut BytesMut) -> R
 
     value_buf.put_u8(0x00);
 
-    let ie_count = 4u16;
-    value_buf.put_u16(ie_count);
+    let ie_count = 4usize;
+    if ie_count < 128 {
+        value_buf.put_u8((ie_count - 1) as u8);
+    } else {
+        encode_aper_length(ie_count - 1, &mut value_buf);
+    }
 
     let ie_data = encode_ng_setup_response_ies(response)?;
     value_buf.put_slice(&ie_data);
@@ -677,7 +682,7 @@ fn encode_aper_length(length: usize, buf: &mut BytesMut) {
     if length < 128 {
         buf.put_u8(length as u8);
     } else if length < 16384 {
-        buf.put_u8(0x80 | ((length >> 8) as u8));
+        buf.put_u8(0x80 | (((length >> 8) & 0x3F) as u8));
         buf.put_u8((length & 0xFF) as u8);
     } else {
         buf.put_u8(0xC0);
@@ -726,8 +731,12 @@ fn encode_ng_setup_failure(failure: &NgSetupFailure, buf: &mut BytesMut) -> Resu
 
     value_buf.put_u8(0x00);
 
-    let ie_count = if failure.time_to_wait.is_some() { 2u16 } else { 1u16 };
-    value_buf.put_u16(ie_count);
+    let ie_count = if failure.time_to_wait.is_some() { 2usize } else { 1usize };
+    if ie_count < 128 {
+        value_buf.put_u8((ie_count - 1) as u8);
+    } else {
+        encode_aper_length(ie_count - 1, &mut value_buf);
+    }
 
     value_buf.put_u16(15);
     value_buf.put_u8(0x00);
