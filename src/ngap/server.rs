@@ -89,6 +89,7 @@ async fn handle_sctp_association(
 
                 match NgapPdu::decode(&buf[..len]) {
                     Ok(pdu) => {
+                        debug!("Successfully decoded NGAP PDU: {:?}", pdu);
                         if let Err(e) = handle_ngap_message(
                             pdu,
                             &config,
@@ -102,6 +103,7 @@ async fn handle_sctp_association(
                     }
                     Err(e) => {
                         error!("Failed to decode NGAP PDU: {}", e);
+                        debug!("Failed PDU bytes (first 100): {:02x?}", &buf[..len.min(100)]);
                     }
                 }
             }
@@ -125,8 +127,11 @@ async fn handle_ngap_message(
 ) -> Result<()> {
     match pdu {
         NgapPdu::InitiatingMessage(msg) => {
+            info!("Processing initiating message, procedure code: {}", msg.procedure_code);
             match msg.value {
                 NgapMessageValue::NgSetupRequest(request) => {
+                    info!("NG Setup Request - RAN Node: {:?}, TAs: {}, Paging DRX: {}",
+                        request.global_ran_node_id, request.supported_ta_list.len(), request.default_paging_drx);
                     let response_pdu = handlers::handle_ng_setup_request(
                         request,
                         config,
