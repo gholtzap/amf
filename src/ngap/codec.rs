@@ -269,7 +269,7 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
         }
 
         let ie_id = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
-        let ie_criticality = data[cursor + 2];
+        let ie_criticality = (data[cursor + 2] >> 6) & 0x03;
         cursor += 3;
 
         if cursor >= data.len() {
@@ -277,7 +277,7 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
             break;
         }
 
-        let (ie_length, length_bytes) = decode_length(&data[cursor..])?;
+        let (ie_length, length_bytes) = decode_aper_length(&data[cursor..])?;
         cursor += length_bytes;
 
         debug!("IE {}: ID={}, Criticality={}, Length={}, Cursor={}", i, ie_id, ie_criticality, ie_length, cursor);
