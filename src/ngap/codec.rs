@@ -262,10 +262,12 @@ fn decode_ng_setup_request(data: &[u8]) -> Result<NgSetupRequest> {
     debug!("Extension bit: {:02x} at position 0", extension_bit);
 
     debug!("IE count bytes at position {}: {:02x?}", cursor, &data[cursor..cursor+2.min(data.len()-cursor)]);
-    let (decoded_count, count_bytes) = decode_aper_length(&data[cursor..])?;
-    let ie_count = decoded_count + 1;
-    cursor += count_bytes;
-    debug!("Number of IEs: {} (decoded_count={}, count_bytes={})", ie_count, decoded_count, count_bytes);
+    if cursor + 2 > data.len() {
+        return Err(anyhow!("Not enough data for IE count"));
+    }
+    let ie_count = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
+    debug!("Number of IEs: {} (16-bit big-endian from bytes [{:02x}, {:02x}])", ie_count, data[cursor-2], data[cursor-1]);
     debug!("Cursor after IE count: {}, remaining bytes: {}", cursor, data.len() - cursor);
 
     for i in 0..ie_count {
@@ -729,29 +731,71 @@ fn encode_aper_length(length: usize, buf: &mut BytesMut) {
 }
 
 fn decode_ng_setup_failure(data: &[u8]) -> Result<NgSetupFailure> {
+    use tracing::debug;
+
     let mut cursor = 0;
     let mut cause = None;
 
-    while cursor + 3 < data.len() {
-        let ie_id = data[cursor];
+    if data.len() < 3 {
+        return Err(anyhow!("NG Setup Failure data too short"));
+    }
+
+    let extension_bit = data[cursor];
+    cursor += 1;
+    debug!("NG Setup Failure extension bit: {:02x}", extension_bit);
+
+    if cursor + 2 > data.len() {
+        return Err(anyhow!("Not enough data for IE count"));
+    }
+    let ie_count = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
+    debug!("NG Setup Failure IE count: {}", ie_count);
+
+    for i in 0..ie_count {
+        if cursor + 3 > data.len() {
+            debug!("Not enough data for IE {} header", i);
+            break;
+        }
+
+        let ie_id = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        let ie_criticality = (data[cursor + 2] >> 6) & 0x03;
         cursor += 3;
 
-        if ie_id == 15 {
-            if cursor < data.len() {
-                let cause_type = data[cursor];
-                cursor += 1;
-                if cursor < data.len() {
-                    let cause_value = data[cursor];
+        if cursor >= data.len() {
+            debug!("No length field for IE {}", i);
+            break;
+        }
+
+        let (ie_length, length_bytes) = decode_aper_length(&data[cursor..])?;
+        cursor += length_bytes;
+
+        debug!("NG Setup Failure IE {}: ID={}, Length={}", i, ie_id, ie_length);
+
+        if cursor + ie_length > data.len() {
+            debug!("IE {} length exceeds data", i);
+            break;
+        }
+
+        match ie_id {
+            15 => {
+                if ie_length >= 2 {
+                    let cause_type = data[cursor];
+                    let cause_value = data[cursor + 1];
                     cause = Some(Cause {
                         cause_type,
                         cause_value,
                     });
-                    cursor += 1;
+                    debug!("Found Cause IE: type={}, value={}", cause_type, cause_value);
                 }
+                cursor += ie_length;
             }
-        } else {
-            if cursor < data.len() {
-                cursor += 1;
+            107 => {
+                debug!("Found TimeToWait IE (skipping)");
+                cursor += ie_length;
+            }
+            _ => {
+                debug!("Unknown IE ID: {}, skipping", ie_id);
+                cursor += ie_length;
             }
         }
     }
@@ -795,31 +839,57 @@ fn encode_ng_setup_failure(failure: &NgSetupFailure, buf: &mut BytesMut) -> Resu
 }
 
 fn decode_initial_ue_message(data: &[u8]) -> Result<InitialUeMessage> {
+    use tracing::debug;
+
     let mut cursor = 0;
     let mut ran_ue_ngap_id = None;
     let mut nas_pdu = Vec::new();
     let mut user_location_info = None;
     let mut rrc_establishment_cause = 0;
 
-    while cursor < data.len() {
+    if data.len() < 3 {
+        return Err(anyhow!("Initial UE Message data too short"));
+    }
+
+    let extension_bit = data[cursor];
+    cursor += 1;
+    debug!("Initial UE Message extension bit: {:02x}", extension_bit);
+
+    if cursor + 2 > data.len() {
+        return Err(anyhow!("Not enough data for IE count"));
+    }
+    let ie_count = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
+    debug!("Initial UE Message IE count: {}", ie_count);
+
+    for i in 0..ie_count {
         if cursor + 3 > data.len() {
+            debug!("Not enough data for IE {} header", i);
             break;
         }
 
-        let ie_id = data[cursor];
-        cursor += 1;
-        let _criticality = data[cursor];
-        cursor += 1;
-        let length = data[cursor] as usize;
-        cursor += 1;
+        let ie_id = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        let ie_criticality = (data[cursor + 2] >> 6) & 0x03;
+        cursor += 3;
 
-        if cursor + length > data.len() {
+        if cursor >= data.len() {
+            debug!("No length field for IE {}", i);
+            break;
+        }
+
+        let (ie_length, length_bytes) = decode_aper_length(&data[cursor..])?;
+        cursor += length_bytes;
+
+        debug!("Initial UE Message IE {}: ID={}, Length={}", i, ie_id, ie_length);
+
+        if cursor + ie_length > data.len() {
+            debug!("IE {} length exceeds data", i);
             break;
         }
 
         match ie_id {
             85 => {
-                if length >= 4 {
+                if ie_length >= 4 {
                     let id = u32::from_be_bytes([
                         data[cursor],
                         data[cursor + 1],
@@ -827,20 +897,24 @@ fn decode_initial_ue_message(data: &[u8]) -> Result<InitialUeMessage> {
                         data[cursor + 3],
                     ]) as u64;
                     ran_ue_ngap_id = Some(id);
+                    debug!("RAN-UE-NGAP-ID: {}", id);
                 }
-                cursor += length;
+                cursor += ie_length;
             }
             38 => {
-                nas_pdu = data[cursor..cursor + length].to_vec();
-                cursor += length;
+                nas_pdu = data[cursor..cursor + ie_length].to_vec();
+                debug!("NAS-PDU length: {}", ie_length);
+                cursor += ie_length;
             }
             121 => {
-                if length >= 9 {
+                if ie_length >= 9 {
                     let tai_plmn = decode_plmn_identity(&data[cursor..cursor + 3]);
                     let tac = format!("{:02x}{:02x}{:02x}",
                         data[cursor + 3], data[cursor + 4], data[cursor + 5]);
 
-                    let nr_cgi = if length >= 15 {
+                    debug!("User Location Info: TAC={}, PLMN={}-{}", tac, tai_plmn.mcc, tai_plmn.mnc);
+
+                    let nr_cgi = if ie_length >= 15 {
                         let cgi_plmn = decode_plmn_identity(&data[cursor + 6..cursor + 9]);
                         let nr_cell_id = format!("{:02x}{:02x}{:02x}{:02x}{:02x}",
                             data[cursor + 9], data[cursor + 10], data[cursor + 11],
@@ -861,16 +935,18 @@ fn decode_initial_ue_message(data: &[u8]) -> Result<InitialUeMessage> {
                         },
                     });
                 }
-                cursor += length;
+                cursor += ie_length;
             }
             90 => {
-                if length >= 1 {
+                if ie_length >= 1 {
                     rrc_establishment_cause = data[cursor];
+                    debug!("RRC Establishment Cause: {}", rrc_establishment_cause);
                 }
-                cursor += length;
+                cursor += ie_length;
             }
             _ => {
-                cursor += length;
+                debug!("Unknown IE ID: {}, skipping", ie_id);
+                cursor += ie_length;
             }
         }
     }
